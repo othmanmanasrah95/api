@@ -1,0 +1,18 @@
+# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN
+PassengerAppRoot "/home/ujacipnjiw7x/api"
+PassengerBaseURI "/"
+PassengerNodejs "/home/ujacipnjiw7x/nodevenv/api/24/bin/node"
+PassengerAppType node
+PassengerStartupFile server.js
+PassengerAppLogFile "/home/ujacipnjiw7x/logs/passenger.log"
+# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END
+# DO NOT REMOVE OR MODIFY. CLOUDLINUX ENV VARS CONFIGURATION BEGIN
+<IfModule Litespeed>
+SetEnv ALLOWED_ORIGINS https://zeituna.co,https://www.zeituna.co
+SetEnv FRONTEND_URL https://zeituna.co
+SetEnv JWT_SECRET 5d2aa555173cdd5b7866115dd4bb5909c327293b1db1ba739136fa37a1da8db2
+SetEnv NODE_ENV production
+SetEnv PORT 3000
+SetEnv MONGO_URI mongodb+srv://Zeituna:Zeituna2025@cluster0.hiwwgxf.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
+</IfModule>
+# DO NOT REMOVE OR MODIFY. CLOUDLINUX ENV VARS CONFIGURATION END
