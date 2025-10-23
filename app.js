@@ -17,6 +17,7 @@ const transactionRoutes = require('./routes/transactionRoutes');
 const orderRoutes = require('./routes/orderRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const discountRoutes = require('./routes/discountRoutes');
+const emailRoutes = require('./routes/emailRoutes');
 
 // Initialize express app
 const app = express();
@@ -178,6 +179,7 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/discounts', discountRoutes);
+app.use('/api/email', emailRoutes);
 
 // 404 handler
 app.use(notFound);

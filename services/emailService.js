@@ -1,0 +1,457 @@
+const { Resend } = require('resend');
+
+class EmailService {
+  constructor() {
+    this.resend = new Resend(process.env.RESEND_API_KEY);
+    this.fromEmail = process.env.FROM_EMAIL || 'noreply@zeituna.com';
+    this.fromName = process.env.FROM_NAME || 'Zeituna Platform';
+    this.supportEmail = process.env.SUPPORT_EMAIL || 'support@zeituna.com';
+  }
+
+  // Send welcome email to new users
+  async sendWelcomeEmail(userEmail, userName) {
+    try {
+      const { data, error } = await this.resend.emails.send({
+        from: `${this.fromName} <${this.fromEmail}>`,
+        to: [userEmail],
+        subject: 'Welcome to Zeituna - Your Sustainable Journey Begins! 🌱',
+        html: this.getWelcomeEmailTemplate(userName),
+      });
+
+      if (error) {
+        console.error('Error sending welcome email:', error);
+        return { success: false, error };
+      }
+
+      console.log('Welcome email sent successfully:', data);
+      return { success: true, data };
+    } catch (error) {
+      console.error('Error sending welcome email:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Send order confirmation email
+  async sendOrderConfirmationEmail(userEmail, userName, orderData) {
+    try {
+      const { data, error } = await this.resend.emails.send({
+        from: `${this.fromName} <${this.fromEmail}>`,
+        to: [userEmail],
+        subject: `Order Confirmation - ${orderData.orderNumber}`,
+        html: this.getOrderConfirmationTemplate(userName, orderData),
+      });
+
+      if (error) {
+        console.error('Error sending order confirmation email:', error);
+        return { success: false, error };
+      }
+
+      console.log('Order confirmation email sent successfully:', data);
+      return { success: true, data };
+    } catch (error) {
+      console.error('Error sending order confirmation email:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Send tree adoption confirmation email
+  async sendTreeAdoptionEmail(userEmail, userName, treeData) {
+    try {
+      const { data, error } = await this.resend.emails.send({
+        from: `${this.fromName} <${this.fromEmail}>`,
+        to: [userEmail],
+        subject: `Tree Adoption Confirmed - ${treeData.name} 🌳`,
+        html: this.getTreeAdoptionTemplate(userName, treeData),
+      });
+
+      if (error) {
+        console.error('Error sending tree adoption email:', error);
+        return { success: false, error };
+      }
+
+      console.log('Tree adoption email sent successfully:', data);
+      return { success: true, data };
+    } catch (error) {
+      console.error('Error sending tree adoption email:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Send password reset email
+  async sendPasswordResetEmail(userEmail, userName, resetToken) {
+    try {
+      const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+      
+      const { data, error } = await this.resend.emails.send({
+        from: `${this.fromName} <${this.fromEmail}>`,
+        to: [userEmail],
+        subject: 'Reset Your Zeituna Password',
+        html: this.getPasswordResetTemplate(userName, resetUrl),
+      });
+
+      if (error) {
+        console.error('Error sending password reset email:', error);
+        return { success: false, error };
+      }
+
+      console.log('Password reset email sent successfully:', data);
+      return { success: true, data };
+    } catch (error) {
+      console.error('Error sending password reset email:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Send TUT token reward notification
+  async sendTUTRewardEmail(userEmail, userName, rewardData) {
+    try {
+      const { data, error } = await this.resend.emails.send({
+        from: `${this.fromName} <${this.fromEmail}>`,
+        to: [userEmail],
+        subject: `You've Earned ${rewardData.amount} TUT Tokens! 🎉`,
+        html: this.getTUTRewardTemplate(userName, rewardData),
+      });
+
+      if (error) {
+        console.error('Error sending TUT reward email:', error);
+        return { success: false, error };
+      }
+
+      console.log('TUT reward email sent successfully:', data);
+      return { success: true, data };
+    } catch (error) {
+      console.error('Error sending TUT reward email:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Send marketplace notification email
+  async sendMarketplaceNotificationEmail(userEmail, userName, notificationData) {
+    try {
+      const { data, error } = await this.resend.emails.send({
+        from: `${this.fromName} <${this.fromEmail}>`,
+        to: [userEmail],
+        subject: notificationData.subject || 'New Update from Zeituna Marketplace',
+        html: this.getMarketplaceNotificationTemplate(userName, notificationData),
+      });
+
+      if (error) {
+        console.error('Error sending marketplace notification email:', error);
+        return { success: false, error };
+      }
+
+      console.log('Marketplace notification email sent successfully:', data);
+      return { success: true, data };
+    } catch (error) {
+      console.error('Error sending marketplace notification email:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Email Templates
+  getWelcomeEmailTemplate(userName) {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Welcome to Zeituna</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #10b981, #3b82f6); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
+          .button { display: inline-block; background: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+          .feature { margin: 20px 0; padding: 15px; background: white; border-radius: 8px; border-left: 4px solid #10b981; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🌱 Welcome to Zeituna!</h1>
+            <p>Your sustainable journey starts here</p>
+          </div>
+          <div class="content">
+            <h2>Hello ${userName}!</h2>
+            <p>Welcome to Zeituna, where sustainability meets innovation. We're thrilled to have you join our community of conscious consumers and environmental advocates.</p>
+            
+            <div class="feature">
+              <h3>🌳 Adopt a Tree</h3>
+              <p>Make a lasting impact by adopting an olive tree and receiving a unique NFT certificate.</p>
+            </div>
+            
+            <div class="feature">
+              <h3>🛒 Sustainable Marketplace</h3>
+              <p>Discover eco-friendly products from local artisans and support Palestinian communities.</p>
+            </div>
+            
+            <div class="feature">
+              <h3>🪙 Earn TUT Tokens</h3>
+              <p>Get rewarded for your sustainable choices with our TUT token system.</p>
+            </div>
+            
+            <p>Ready to start your journey?</p>
+            <a href="${process.env.FRONTEND_URL}/roots" class="button">Explore Tree Adoption</a>
+            <a href="${process.env.FRONTEND_URL}/marketplace" class="button">Visit Marketplace</a>
+            
+            <p>If you have any questions, feel free to reach out to us at <a href="mailto:${this.supportEmail}">${this.supportEmail}</a></p>
+            
+            <p>Best regards,<br>The Zeituna Team</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  getOrderConfirmationTemplate(userName, orderData) {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Order Confirmation</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #10b981, #3b82f6); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
+          .order-details { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; }
+          .item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
+          .total { font-weight: bold; font-size: 1.2em; color: #10b981; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>✅ Order Confirmed!</h1>
+            <p>Order #${orderData.orderNumber}</p>
+          </div>
+          <div class="content">
+            <h2>Hello ${userName}!</h2>
+            <p>Thank you for your order! We've received your order and will process it shortly.</p>
+            
+            <div class="order-details">
+              <h3>Order Details</h3>
+              ${orderData.items.map(item => `
+                <div class="item">
+                  <span>${item.name} x${item.quantity}</span>
+                  <span>$${item.price}</span>
+                </div>
+              `).join('')}
+              <div class="item total">
+                <span>Total</span>
+                <span>$${orderData.totals.total}</span>
+              </div>
+            </div>
+            
+            <p><strong>Shipping Address:</strong><br>
+            ${orderData.customer.firstName} ${orderData.customer.lastName}<br>
+            ${orderData.shipping.address}<br>
+            ${orderData.shipping.city}, ${orderData.shipping.postalCode}<br>
+            ${orderData.shipping.country}</p>
+            
+            <p>We'll send you tracking information once your order ships.</p>
+            
+            <p>Questions? Contact us at <a href="mailto:${this.supportEmail}">${this.supportEmail}</a></p>
+            
+            <p>Best regards,<br>The Zeituna Team</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  getTreeAdoptionTemplate(userName, treeData) {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Tree Adoption Confirmed</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #10b981, #3b82f6); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
+          .tree-info { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center; }
+          .button { display: inline-block; background: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🌳 Tree Adoption Confirmed!</h1>
+            <p>You've made a positive impact!</p>
+          </div>
+          <div class="content">
+            <h2>Congratulations ${userName}!</h2>
+            <p>You have successfully adopted <strong>${treeData.name}</strong> - a ${treeData.species} tree located in ${treeData.location}.</p>
+            
+            <div class="tree-info">
+              <h3>${treeData.name}</h3>
+              <p><strong>Species:</strong> ${treeData.species}</p>
+              <p><strong>Location:</strong> ${treeData.location}</p>
+              <p><strong>Planted:</strong> ${new Date(treeData.plantedDate).toLocaleDateString()}</p>
+              <p><strong>Height:</strong> ${treeData.height}</p>
+              <p><strong>CO2 Absorbed:</strong> ${treeData.co2Absorbed}</p>
+            </div>
+            
+            <p>Your tree adoption helps support Palestinian farmers and contributes to environmental sustainability. You'll receive regular updates about your tree's growth and impact.</p>
+            
+            <a href="${process.env.FRONTEND_URL}/roots/tree/${treeData._id}" class="button">View Your Tree</a>
+            
+            <p>Thank you for making a difference! 🌱</p>
+            
+            <p>Best regards,<br>The Zeituna Team</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  getPasswordResetTemplate(userName, resetUrl) {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Reset Your Password</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #10b981, #3b82f6); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
+          .button { display: inline-block; background: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+          .warning { background: #fef3c7; border: 1px solid #f59e0b; padding: 15px; border-radius: 8px; margin: 20px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🔐 Password Reset Request</h1>
+            <p>Secure your account</p>
+          </div>
+          <div class="content">
+            <h2>Hello ${userName}!</h2>
+            <p>We received a request to reset your password for your Zeituna account.</p>
+            
+            <p>Click the button below to reset your password:</p>
+            <a href="${resetUrl}" class="button">Reset Password</a>
+            
+            <div class="warning">
+              <p><strong>Important:</strong> This link will expire in 1 hour for security reasons.</p>
+            </div>
+            
+            <p>If you didn't request this password reset, please ignore this email. Your password will remain unchanged.</p>
+            
+            <p>If you have any questions, contact us at <a href="mailto:${this.supportEmail}">${this.supportEmail}</a></p>
+            
+            <p>Best regards,<br>The Zeituna Team</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  getTUTRewardTemplate(userName, rewardData) {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>TUT Token Reward</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #10b981, #3b82f6); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
+          .reward-box { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center; border: 2px solid #10b981; }
+          .button { display: inline-block; background: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🎉 TUT Token Reward!</h1>
+            <p>You've earned tokens for your sustainable actions</p>
+          </div>
+          <div class="content">
+            <h2>Congratulations ${userName}!</h2>
+            <p>You've earned <strong>${rewardData.amount} TUT tokens</strong> for ${rewardData.reason}!</p>
+            
+            <div class="reward-box">
+              <h3>🪙 ${rewardData.amount} TUT Tokens</h3>
+              <p><strong>Reason:</strong> ${rewardData.reason}</p>
+              <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
+            </div>
+            
+            <p>You can use your TUT tokens to:</p>
+            <ul>
+              <li>Get discounts on products in our marketplace</li>
+              <li>Adopt additional trees</li>
+              <li>Support environmental initiatives</li>
+            </ul>
+            
+            <a href="${process.env.FRONTEND_URL}/profile" class="button">View Your Tokens</a>
+            
+            <p>Keep up the great work! Every sustainable action makes a difference. 🌱</p>
+            
+            <p>Best regards,<br>The Zeituna Team</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  getMarketplaceNotificationTemplate(userName, notificationData) {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Marketplace Update</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #10b981, #3b82f6); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
+          .button { display: inline-block; background: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🛒 ${notificationData.title || 'Marketplace Update'}</h1>
+            <p>New products and updates from Zeituna</p>
+          </div>
+          <div class="content">
+            <h2>Hello ${userName}!</h2>
+            <p>${notificationData.message || 'We have exciting updates from our marketplace!'}</p>
+            
+            ${notificationData.content || ''}
+            
+            <a href="${process.env.FRONTEND_URL}/marketplace" class="button">Visit Marketplace</a>
+            
+            <p>Thank you for being part of our sustainable community!</p>
+            
+            <p>Best regards,<br>The Zeituna Team</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+}
+
+module.exports = new EmailService();
