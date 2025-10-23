@@ -64,6 +64,14 @@ TUT_TOKEN_CONTRACT_ADDRESS=0x...
 ZYT_TREE_NFT_CONTRACT_ADDRESS=0x...
 ```
 
+### Email Configuration (Resend)
+```bash
+RESEND_API_KEY=re_your_resend_api_key_here
+FROM_EMAIL=noreply@yourdomain.com
+FROM_NAME=Zeituna Platform
+SUPPORT_EMAIL=support@yourdomain.com
+```
+
 ## Environment File Setup
 
 1. Copy the example environment file:

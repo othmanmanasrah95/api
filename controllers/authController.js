@@ -3,6 +3,7 @@ const TokenBalance = require('../models/tokenBalance');
 const Tree = require('../models/tree');
 const Transaction = require('../models/transaction');
 const { generateToken } = require('../utils/tokenUtils');
+const emailService = require('../services/emailService');
 const mongoose = require('mongoose');
 
 // REGISTER CONTROLLER
@@ -48,6 +49,19 @@ exports.register = async (req, res) => {
 
     // Generate token
     const token = generateToken(newUser._id);
+
+    // Send welcome email (async, don't wait for it)
+    emailService.sendWelcomeEmail(newUser.email, newUser.name)
+      .then(result => {
+        if (result.success) {
+          console.log('Welcome email sent successfully to:', newUser.email);
+        } else {
+          console.error('Failed to send welcome email:', result.error);
+        }
+      })
+      .catch(error => {
+        console.error('Error sending welcome email:', error);
+      });
 
     res.status(201).json({
       success: true,
