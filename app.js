@@ -18,6 +18,7 @@ const orderRoutes = require('./routes/orderRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const discountRoutes = require('./routes/discountRoutes');
 const emailRoutes = require('./routes/emailRoutes');
+const stripeRoutes = require('./routes/stripeRoutes');
 
 // Initialize express app
 const app = express();
@@ -180,6 +181,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/discounts', discountRoutes);
 app.use('/api/email', emailRoutes);
+app.use('/api/stripe', stripeRoutes);
 
 // 404 handler
 app.use(notFound);

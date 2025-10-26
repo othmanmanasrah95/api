@@ -2,6 +2,7 @@ require('dotenv').config();
 
 // Validate required environment variables
 const requiredEnvVars = ['JWT_SECRET', 'MONGO_URI'];
+const optionalEnvVars = ['STRIPE_SECRET_KEY', 'STRIPE_PUBLISHABLE_KEY', 'STRIPE_WEBHOOK_SECRET'];
 const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
 
 if (missingEnvVars.length > 0) {

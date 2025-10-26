@@ -9,7 +9,8 @@
     "test": "jest",
     "init-currency": "node scripts/initCurrency.js",
     "create-olive-oil": "node scripts/createOliveOilProduct.js",
-    "test-email": "node scripts/testEmailService.js"
+    "test-email": "node scripts/testEmailService.js",
+    "test-stripe": "node scripts/testStripeIntegration.js"
   },
   "dependencies": {
     "axios": "^1.10.0",
@@ -24,7 +25,8 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.0.3",
     "morgan": "^1.10.0",
-    "resend": "^3.2.0"
+    "resend": "^3.2.0",
+    "stripe": "^19.1.0"
   },
   "devDependencies": {
     "jest": "^29.7.0",
