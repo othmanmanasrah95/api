@@ -2,15 +2,37 @@ const { Resend } = require('resend');
 
 class EmailService {
   constructor() {
-    this.resend = new Resend(process.env.RESEND_API_KEY);
-    this.fromEmail = process.env.FROM_EMAIL || 'noreply@zeituna.com';
+    // Check if Resend API key is configured
+    if (!process.env.RESEND_API_KEY) {
+      console.warn('⚠️  RESEND_API_KEY not found in environment variables');
+      this.resend = null;
+    } else {
+      this.resend = new Resend(process.env.RESEND_API_KEY);
+    }
+    
+    // Use Resend's default domain for testing if custom domain not verified
+    // Check if the configured email uses a verified domain
+    const configuredEmail = process.env.FROM_EMAIL || 'noreply@zeituna.com';
+    const isCustomDomain = configuredEmail.includes('zeituna.com');
+    
+    this.fromEmail = isCustomDomain ? 'onboarding@resend.dev' : configuredEmail;
     this.fromName = process.env.FROM_NAME || 'Zeituna Platform';
-    this.supportEmail = process.env.SUPPORT_EMAIL || 'support@zeituna.com';
+    this.supportEmail = process.env.SUPPORT_EMAIL || 'hello@zeituna.com';
+  }
+
+  // Helper method to check if email service is configured
+  isConfigured() {
+    return this.resend !== null;
   }
 
   // Send welcome email to new users
   async sendWelcomeEmail(userEmail, userName) {
     try {
+      if (!this.isConfigured()) {
+        console.warn('Email service not configured - RESEND_API_KEY missing');
+        return { success: false, error: 'Email service not configured' };
+      }
+
       const { data, error } = await this.resend.emails.send({
         from: `${this.fromName} <${this.fromEmail}>`,
         to: [userEmail],
@@ -34,6 +56,11 @@ class EmailService {
   // Send order confirmation email
   async sendOrderConfirmationEmail(userEmail, userName, orderData) {
     try {
+      if (!this.isConfigured()) {
+        console.warn('Email service not configured - RESEND_API_KEY missing');
+        return { success: false, error: 'Email service not configured' };
+      }
+
       const { data, error } = await this.resend.emails.send({
         from: `${this.fromName} <${this.fromEmail}>`,
         to: [userEmail],
@@ -57,6 +84,11 @@ class EmailService {
   // Send tree adoption confirmation email
   async sendTreeAdoptionEmail(userEmail, userName, treeData) {
     try {
+      if (!this.isConfigured()) {
+        console.warn('Email service not configured - RESEND_API_KEY missing');
+        return { success: false, error: 'Email service not configured' };
+      }
+
       const { data, error } = await this.resend.emails.send({
         from: `${this.fromName} <${this.fromEmail}>`,
         to: [userEmail],
@@ -80,6 +112,11 @@ class EmailService {
   // Send password reset email
   async sendPasswordResetEmail(userEmail, userName, resetToken) {
     try {
+      if (!this.isConfigured()) {
+        console.warn('Email service not configured - RESEND_API_KEY missing');
+        return { success: false, error: 'Email service not configured' };
+      }
+
       const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
       
       const { data, error } = await this.resend.emails.send({
@@ -105,6 +142,11 @@ class EmailService {
   // Send TUT token reward notification
   async sendTUTRewardEmail(userEmail, userName, rewardData) {
     try {
+      if (!this.isConfigured()) {
+        console.warn('Email service not configured - RESEND_API_KEY missing');
+        return { success: false, error: 'Email service not configured' };
+      }
+
       const { data, error } = await this.resend.emails.send({
         from: `${this.fromName} <${this.fromEmail}>`,
         to: [userEmail],
@@ -128,6 +170,11 @@ class EmailService {
   // Send marketplace notification email
   async sendMarketplaceNotificationEmail(userEmail, userName, notificationData) {
     try {
+      if (!this.isConfigured()) {
+        console.warn('Email service not configured - RESEND_API_KEY missing');
+        return { success: false, error: 'Email service not configured' };
+      }
+
       const { data, error } = await this.resend.emails.send({
         from: `${this.fromName} <${this.fromEmail}>`,
         to: [userEmail],

@@ -255,6 +255,15 @@ exports.sendBulkEmails = asyncHandler(async (req, res) => {
 // @route   GET /api/email/test
 // @access  Private/Admin
 exports.testEmailService = asyncHandler(async (req, res) => {
+  // Check if email service is configured
+  if (!emailService.isConfigured()) {
+    return res.status(503).json({
+      success: false,
+      error: 'Email service not configured',
+      message: 'RESEND_API_KEY environment variable is missing'
+    });
+  }
+
   const testEmail = req.user.email;
   const testName = req.user.name;
 
@@ -273,4 +282,25 @@ exports.testEmailService = asyncHandler(async (req, res) => {
       details: result.error
     });
   }
+});
+
+// @desc    Check email service status
+// @route   GET /api/email/status
+// @access  Public
+exports.getEmailServiceStatus = asyncHandler(async (req, res) => {
+  const isConfigured = emailService.isConfigured();
+  const hasApiKey = !!process.env.RESEND_API_KEY;
+  const fromEmail = process.env.FROM_EMAIL || 'noreply@zeituna.com';
+  const fromName = process.env.FROM_NAME || 'Zeituna Platform';
+
+  res.status(200).json({
+    success: true,
+    data: {
+      configured: isConfigured,
+      hasApiKey,
+      fromEmail,
+      fromName,
+      supportEmail: process.env.SUPPORT_EMAIL || 'support@zeituna.com'
+    }
+  });
 });

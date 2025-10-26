@@ -8,16 +8,20 @@ const {
   sendTUTRewardEmail,
   sendMarketplaceNotificationEmail,
   sendBulkEmails,
-  testEmailService
+  testEmailService,
+  getEmailServiceStatus
 } = require('../controllers/emailController');
 const { protect, authorize } = require('../middleware/auth');
 const { validateEmail } = require('../middleware/validation');
 
+// Check email service status (Public)
+router.get('/status', getEmailServiceStatus);
+
 // Test email service (Admin only)
 router.get('/test', protect, authorize('admin'), testEmailService);
 
-// Send welcome email (Admin only)
-router.post('/welcome', protect, authorize('admin'), validateEmail, sendWelcomeEmail);
+// Send welcome email (Authenticated users)
+router.post('/welcome', protect, validateEmail, sendWelcomeEmail);
 
 // Send order confirmation email (Authenticated users)
 router.post('/order-confirmation', protect, sendOrderConfirmationEmail);

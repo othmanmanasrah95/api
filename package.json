@@ -8,7 +8,8 @@
     "dev": "nodemon server.js",
     "test": "jest",
     "init-currency": "node scripts/initCurrency.js",
-    "create-olive-oil": "node scripts/createOliveOilProduct.js"
+    "create-olive-oil": "node scripts/createOliveOilProduct.js",
+    "test-email": "node scripts/testEmailService.js"
   },
   "dependencies": {
     "axios": "^1.10.0",
