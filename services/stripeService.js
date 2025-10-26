@@ -1,4 +1,4 @@
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY );
 
 class StripeService {
   constructor() {
