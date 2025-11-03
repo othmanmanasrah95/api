@@ -45,35 +45,32 @@ exports.register = async (req, res) => {
     const newUser = new User({ name, email, password,
       walletAddress: walletAddress || null,
       walletConnected: !!walletAddress });
+
+    // Generate 6-digit verification code and expiry (10 minutes)
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    newUser.verificationCode = code;
+    newUser.verificationCodeExpires = new Date(Date.now() + 10 * 60 * 1000);
     await newUser.save();
 
-    // Generate token
-    const token = generateToken(newUser._id);
-
-    // Send welcome email (async, don't wait for it)
-    emailService.sendWelcomeEmail(newUser.email, newUser.name)
+    // Send verification email (async)
+    emailService.sendVerificationEmail(newUser.email, newUser.name, code)
       .then(result => {
         if (result.success) {
-          console.log('Welcome email sent successfully to:', newUser.email);
+          console.log('Verification email sent successfully to:', newUser.email);
         } else {
-          console.error('Failed to send welcome email:', result.error);
+          console.error('Failed to send verification email:', result.error);
         }
       })
       .catch(error => {
-        console.error('Error sending welcome email:', error);
+        console.error('Error sending verification email:', error);
       });
 
     res.status(201).json({
       success: true,
-      message: 'User registered successfully',
+      message: 'Registration successful. Please verify your email with the 6-digit code sent to you.',
       data: {
         _id: newUser._id,
-        name: newUser.name,
-        email: newUser.email,
-        role: newUser.role,
-        walletAddress: newUser.walletAddress,
-        walletConnected: newUser.walletConnected,
-        token
+        email: newUser.email
       }
     });
   } catch (err) {
@@ -107,6 +104,15 @@ exports.login = async (req, res) => {
       });
     }
 
+    // Block login if email is not verified
+    if (!user.isVerified) {
+      return res.status(403).json({
+        success: false,
+        error: 'Email not verified. Please check your email for the code.',
+        needsVerification: true
+      });
+    }
+
     // Generate token
     const token = generateToken(user._id);
 
@@ -127,6 +133,87 @@ exports.login = async (req, res) => {
       success: false,
       error: error.message
     });
+  }
+};
+
+// @desc    Verify email with code
+// @route   POST /api/auth/verify-email
+// @access  Public
+exports.verifyEmail = async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    if (!email || !code) {
+      return res.status(400).json({ success: false, error: 'Email and code are required' });
+    }
+
+    const user = await User.findOne({ email }).select('+verificationCode +verificationCodeExpires');
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    if (user.isVerified) {
+      return res.status(200).json({ success: true, message: 'Email already verified' });
+    }
+
+    if (!user.verificationCode || !user.verificationCodeExpires) {
+      return res.status(400).json({ success: false, error: 'No verification code found. Please request a new code.' });
+    }
+
+    if (user.verificationCode !== code) {
+      return res.status(400).json({ success: false, error: 'Invalid verification code' });
+    }
+
+    if (user.verificationCodeExpires < new Date()) {
+      return res.status(400).json({ success: false, error: 'Verification code has expired' });
+    }
+
+    user.isVerified = true;
+    user.verificationCode = undefined;
+    user.verificationCodeExpires = undefined;
+    await user.save();
+
+    // Optionally send welcome email after verification
+    emailService.sendWelcomeEmail(user.email, user.name).catch(() => {});
+
+    const token = generateToken(user._id);
+    return res.status(200).json({ success: true, message: 'Email verified successfully', data: { token } });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: 'Server error' });
+  }
+};
+
+// @desc    Resend verification code
+// @route   POST /api/auth/resend-verification
+// @access  Public
+exports.resendVerification = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'Email is required' });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    if (user.isVerified) {
+      return res.status(200).json({ success: true, message: 'Email already verified' });
+    }
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    user.verificationCode = code;
+    user.verificationCodeExpires = new Date(Date.now() + 10 * 60 * 1000);
+    await user.save();
+
+    const result = await emailService.sendVerificationEmail(user.email, user.name || 'User', code);
+    if (!result.success) {
+      return res.status(500).json({ success: false, error: 'Failed to send verification email' });
+    }
+
+    return res.status(200).json({ success: true, message: 'Verification code resent' });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: 'Server error' });
   }
 };
 

@@ -53,6 +53,34 @@ class EmailService {
     }
   }
 
+  // Send email verification code
+  async sendVerificationEmail(userEmail, userName, code) {
+    try {
+      if (!this.isConfigured()) {
+        console.warn('Email service not configured - RESEND_API_KEY missing');
+        return { success: false, error: 'Email service not configured' };
+      }
+
+      const { data, error } = await this.resend.emails.send({
+        from: `${this.fromName} <${this.fromEmail}>`,
+        to: [userEmail],
+        subject: 'Verify your email address',
+        html: this.getVerificationEmailTemplate(userName, code),
+      });
+
+      if (error) {
+        console.error('Error sending verification email:', error);
+        return { success: false, error };
+      }
+
+      console.log('Verification email sent successfully:', data);
+      return { success: true, data };
+    } catch (error) {
+      console.error('Error sending verification email:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
   // Send order confirmation email
   async sendOrderConfirmationEmail(userEmail, userName, orderData) {
     try {
@@ -493,6 +521,41 @@ class EmailService {
             <p>Thank you for being part of our sustainable community!</p>
             
             <p>Best regards,<br>The Zeituna Team</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  getVerificationEmailTemplate(userName, code) {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Verify Your Email</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #10b981, #3b82f6); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
+          .code { font-size: 28px; letter-spacing: 6px; font-weight: bold; background: #111827; color: #ecfdf5; padding: 12px 16px; display: inline-block; border-radius: 8px; }
+          .note { color: #6b7280; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>Verify your email</h1>
+            <p>Complete your registration</p>
+          </div>
+          <div class="content">
+            <h2>Hello ${userName}!</h2>
+            <p>Use the verification code below to confirm your email address on Zeituna.</p>
+            <p class="code">${code}</p>
+            <p class="note">This code will expire in 10 minutes. If you didn't create an account, you can ignore this email.</p>
           </div>
         </div>
       </body>
