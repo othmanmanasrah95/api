@@ -147,11 +147,11 @@ const validateOrder = [
     .isLength({ min: 2, max: 100 })
     .withMessage("Country must be between 2 and 100 characters"),
   body("payment.method")
-    .isIn(["card", "tut", "credit_card", "paypal", "bank_transfer"])
+    .isIn(["stripe"]) // Stripe is the only supported method
     .withMessage("Invalid payment method"),
   body("payment.currency")
     .optional()
-    .isIn(["USD", "EUR", "JOD", "TUT"])
+    .isIn(["USD", "EUR", "JOD"]) // Remove TUT currency
     .withMessage("Invalid currency"),
   (req, res, next) => {
     const errors = validationResult(req);

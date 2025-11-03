@@ -35,8 +35,8 @@ const orderSchema = new mongoose.Schema({
     },
     purchaseMethod: {
       type: String,
-      enum: ['money', 'tut', 'card'],
-      default: 'money'
+      enum: ['stripe'],
+      default: 'stripe'
     },
     tutRewardPercent: {
       type: Number,
@@ -85,9 +85,9 @@ const orderSchema = new mongoose.Schema({
   },
   payment: {
     method: {
-      type: String,
-      enum: ['card', 'tut', 'stripe', 'credit_card', 'paypal', 'bank_transfer'],
-      required: true
+    	type: String,
+    	enum: ['stripe'],
+    	required: true
     },
     amount: {
       type: Number,
