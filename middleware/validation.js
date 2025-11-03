@@ -114,6 +114,19 @@ const validateOrder = [
   body("items.*.quantity")
     .isInt({ min: 1 })
     .withMessage("Quantity must be a positive integer"),
+  // Optional adoption gift fields for tree items
+  body('items.*.adoptionFor')
+    .optional()
+    .isIn(['self', 'gift'])
+    .withMessage('Invalid adoption option'),
+  body('items.*.giftRecipientName')
+    .optional()
+    .isLength({ min: 1, max: 100 })
+    .withMessage('Gift recipient name must be provided when gifting'),
+  body('items.*.giftRecipientEmail')
+    .optional()
+    .isEmail()
+    .withMessage('Gift recipient email must be valid'),
   body("customer.firstName")
     .trim()
     .isLength({ min: 2, max: 50 })

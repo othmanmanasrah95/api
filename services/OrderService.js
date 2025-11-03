@@ -2,11 +2,13 @@ const BaseService = require('./BaseService');
 const Order = require('../models/order');
 const Product = require('../models/product');
 const ProductVariant = require('../models/productVariant');
+const Tree = require('../models/tree');
 const User = require('../models/user');
 const TokenBalance = require('../models/tokenBalance');
 const TokenTransaction = require('../models/tokenTransaction');
 const tutPaymentService = require('./tutPaymentService');
 const constants = require('../config/constants');
+const emailService = require('../services/emailService');
 
 class OrderService extends BaseService {
   constructor() {
@@ -124,8 +126,18 @@ class OrderService extends BaseService {
           };
         }
       } else if (item.type === 'tree') {
-        // Handle tree items if needed
-        throw new Error('Tree items not yet implemented');
+        // Tree adoption item
+        const tree = await Tree.findById(item.id);
+        if (!tree) {
+          throw new Error(`Tree not found: ${item.id}`);
+        }
+
+        productData = {
+          treeId: tree._id.toString(),
+          name: `Tree Adoption - ${tree.name}`,
+          price: tree.adoptionPrice,
+          tutPrice: null
+        };
       } else {
         throw new Error(`Invalid item type: ${item.type}`);
       }
@@ -142,7 +154,10 @@ class OrderService extends BaseService {
         type: item.type,
         purchaseMethod: item.purchaseMethod || 'money',
         tutRewardPercent: item.tutRewardPercent || 0,
-        tutRewardFixed: item.tutRewardFixed || 0
+        tutRewardFixed: item.tutRewardFixed || 0,
+        adoptionFor: item.adoptionFor || 'self',
+        giftRecipientName: item.giftRecipientName || '',
+        giftRecipientEmail: item.giftRecipientEmail || ''
       });
     }
 
@@ -242,10 +257,68 @@ class OrderService extends BaseService {
       if (trackingNumber) {
         updateData.trackingNumber = trackingNumber;
       }
+      const updated = await this.updateById(orderId, updateData);
 
-      return await this.updateById(orderId, updateData);
+      // When an order is confirmed, send adoption certificates if applicable
+      if (updated && status === constants.ORDER_STATUS.CONFIRMED) {
+        try {
+          await this.sendCertificatesIfNeeded(updated);
+        } catch (e) {
+          console.error('Failed to send adoption certificates:', e);
+        }
+      }
+
+      return updated;
     } catch (error) {
       throw new Error(`Failed to update order status: ${error.message}`);
+    }
+  }
+
+  async sendCertificatesIfNeeded(order) {
+    const treeItems = (order.items || []).filter(i => i.type === 'tree');
+    if (treeItems.length === 0) return;
+
+    for (const item of treeItems) {
+      // Load tree info for richer certificate details
+      let tree = null;
+      if (item.treeId) {
+        try { tree = await Tree.findById(item.treeId); } catch (_) { /* ignore */ }
+      }
+      const treeInfo = tree ? {
+        name: tree.name,
+        location: tree.location,
+        species: tree.species
+      } : { name: item.name?.replace('Tree Adoption - ', ''), location: 'Palestine', species: 'Olive' };
+
+      const adopterName = `${order.customer.firstName} ${order.customer.lastName}`.trim();
+
+      if (item.adoptionFor === 'gift' && item.giftRecipientEmail) {
+        // Send certificate to recipient
+        await emailService.sendAdoptionCertificateEmail({
+          recipientEmail: item.giftRecipientEmail,
+          recipientName: item.giftRecipientName || 'Friend',
+          adopterName,
+          treeInfo,
+          isGift: true
+        });
+        // Send confirmation certificate to the purchaser as well
+        await emailService.sendAdoptionCertificateEmail({
+          recipientEmail: order.customer.email,
+          recipientName: adopterName,
+          adopterName,
+          treeInfo,
+          isGift: true
+        });
+      } else {
+        // Send certificate to adopter (self)
+        await emailService.sendAdoptionCertificateEmail({
+          recipientEmail: order.customer.email,
+          recipientName: adopterName,
+          adopterName,
+          treeInfo,
+          isGift: false
+        });
+      }
     }
   }
 

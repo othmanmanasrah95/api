@@ -137,6 +137,37 @@ class EmailService {
     }
   }
 
+  // Send adoption certificate (self or gift)
+  async sendAdoptionCertificateEmail({ recipientEmail, recipientName, adopterName, treeInfo, isGift }) {
+    try {
+      if (!this.isConfigured()) {
+        console.warn('Email service not configured - RESEND_API_KEY missing');
+        return { success: false, error: 'Email service not configured' };
+      }
+
+      const subject = isGift
+        ? `A Tree Has Been Adopted For You 🌳`
+        : `Your Tree Adoption Certificate 🌳`;
+
+      const { data, error } = await this.resend.emails.send({
+        from: `${this.fromName} <${this.fromEmail}>`,
+        to: [recipientEmail],
+        subject,
+        html: this.getAdoptionCertificateTemplate({ recipientName, adopterName, treeInfo, isGift })
+      });
+
+      if (error) {
+        console.error('Error sending adoption certificate email:', error);
+        return { success: false, error };
+      }
+
+      return { success: true, data };
+    } catch (error) {
+      console.error('Error sending adoption certificate email:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
   // Send password reset email
   async sendPasswordResetEmail(userEmail, userName, resetToken) {
     try {
@@ -383,6 +414,46 @@ class EmailService {
             <p>Thank you for making a difference! 🌱</p>
             
             <p>Best regards,<br>The Zeituna Team</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  getAdoptionCertificateTemplate({ recipientName, adopterName, treeInfo, isGift }) {
+    const location = treeInfo?.location || 'Palestine';
+    const treeName = treeInfo?.name || 'Olive Tree';
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Adoption Certificate</title>
+        <style>
+          body { font-family: Georgia, 'Times New Roman', serif; background:#0f172a; margin:0; padding:0; }
+          .wrap { max-width: 820px; margin: 0 auto; background: radial-gradient(1000px 500px at 50% -200px, rgba(255,255,255,0.06), rgba(255,255,255,0.0)), #0f172a; color: #e5e7eb; padding: 40px 24px; }
+          .card { background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 40px 32px; text-align: center; }
+          .title { letter-spacing: .25em; text-transform: uppercase; color:#d1fae5; font-weight: 600; }
+          .name { font-family: 'Brush Script MT', cursive; font-size: 42px; color:#f3f4f6; margin: 20px 0; }
+          .muted { color:#cbd5e1; }
+          .cols { display:flex; justify-content: space-between; margin-top: 24px; color:#d1fae5; font-weight:600; }
+          .tree { margin: 28px auto 0; width: 120px; opacity:.9; }
+        </style>
+      </head>
+      <body>
+        <div class="wrap">
+          <div class="card">
+            <div class="title">This certificate is presented to</div>
+            <div class="name">${recipientName}</div>
+            <p class="muted">in recognition of ${isGift ? `${adopterName}'s` : 'your'} olive tree adoption in ${location}.</p>
+            <p class="muted">Your adoption nurtures farmers, preserves heritage, and fuels a future of dignity and resilience.</p>
+            <img class="tree" alt="tree" src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0e/Tree_Silhouette_3.svg/240px-Tree_Silhouette_3.svg.png" />
+            <div class="cols">
+              <div>Location<br/><span class="muted">${location}</span></div>
+              <div>Tree<br/><span class="muted">${treeName}</span></div>
+            </div>
           </div>
         </div>
       </body>

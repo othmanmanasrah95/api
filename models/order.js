@@ -7,9 +7,14 @@ const orderSchema = new mongoose.Schema({
     required: true
   },
   items: [{
+    // Product purchase OR Tree adoption reference
     productId: {
       type: String,
-      required: true
+      required: false
+    },
+    treeId: {
+      type: String,
+      required: false
     },
     name: {
       type: String,
@@ -32,6 +37,20 @@ const orderSchema = new mongoose.Schema({
       type: String,
       enum: ['product', 'tree'],
       required: true
+    },
+    // Adoption gifting options (only for type === 'tree')
+    adoptionFor: {
+      type: String,
+      enum: ['self', 'gift'],
+      default: 'self'
+    },
+    giftRecipientName: {
+      type: String,
+      default: ''
+    },
+    giftRecipientEmail: {
+      type: String,
+      default: ''
     },
     purchaseMethod: {
       type: String,
