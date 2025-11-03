@@ -127,7 +127,8 @@ class OrderService extends BaseService {
         }
       } else if (item.type === 'tree') {
         // Tree adoption item
-        const tree = await Tree.findById(item.id);
+        const cleanTreeId = String(item.id || '').replace(/^variant_/, '');
+        const tree = await Tree.findById(cleanTreeId);
         if (!tree) {
           throw new Error(`Tree not found: ${item.id}`);
         }
