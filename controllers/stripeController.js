@@ -1,6 +1,6 @@
 const stripeService = require('../services/stripeService');
 const Order = require('../models/order');
-const orderService = require('../services/OrderService');
+const orderService = require('../services/OrderService'); 
 const { validationResult } = require('express-validator');
 
 class StripeController {
