@@ -172,8 +172,12 @@ exports.verifyEmail = async (req, res) => {
     user.verificationCodeExpires = undefined;
     await user.save();
 
-    // Optionally send welcome email after verification
+    // Send welcome email and email verified confirmation
     emailService.sendWelcomeEmail(user.email, user.name).catch(() => {});
+    emailService.sendEmailVerifiedEmail({
+      userEmail: user.email,
+      userName: user.name
+    }).catch(() => {});
 
     const token = generateToken(user._id);
     return res.status(200).json({ success: true, message: 'Email verified successfully', data: { token } });
@@ -335,6 +339,18 @@ exports.connectWallet = async (req, res) => {
     user.walletAddress = walletAddress;
     user.walletConnected = true;
     await user.save();
+
+    // Send wallet connected milestone email
+    try {
+      await emailService.sendWalletConnectedEmail({
+        userEmail: user.email,
+        userName: user.name,
+        walletAddress: walletAddress
+      });
+    } catch (e) {
+      console.error('Failed to send wallet connected email:', e);
+    }
+
     res.json({ success: true, message: 'Wallet connected successfully', walletAddress });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

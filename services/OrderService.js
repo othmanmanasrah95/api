@@ -78,6 +78,62 @@ class OrderService extends BaseService {
         await this.deductTutFromWallet(userId, tutTotal, order._id);
       }
 
+      // Send order confirmation email and check for milestones
+      try {
+        const user = await User.findById(userId);
+        if (user && user.email) {
+          // Send order confirmation
+          await emailService.sendOrderConfirmationEmail({
+            userEmail: user.email,
+            userName: user.name,
+            orderData: {
+              orderNumber: order.orderNumber || order._id.toString(),
+              items: order.items,
+              totals: order.totals,
+              shipping: order.shipping,
+              payment: order.payment,
+              status: order.status,
+              customer: order.customer
+            }
+          });
+
+          // Check if this is user's first order
+          const userOrderCount = await this.model.countDocuments({ user: userId });
+          if (userOrderCount === 1) {
+            try {
+              await emailService.sendFirstOrderEmail({
+                userEmail: user.email,
+                userName: user.name,
+                orderData: {
+                  orderNumber: order.orderNumber || order._id.toString()
+                }
+              });
+            } catch (e) {
+              console.error('Failed to send first order email:', e);
+            }
+          }
+
+          // Check for order milestones (10, 25, 50, 100)
+          const milestones = [10, 25, 50, 100];
+          if (milestones.includes(userOrderCount)) {
+            try {
+              await emailService.sendOrderMilestoneEmail({
+                userEmail: user.email,
+                userName: user.name,
+                milestoneData: {
+                  orderCount: userOrderCount
+                }
+              });
+            } catch (e) {
+              console.error('Failed to send order milestone email:', e);
+            }
+          }
+        }
+      } catch (emailError) {
+        console.error('Failed to send order confirmation email:', emailError);
+        // Don't fail the order creation if email fails
+      }
+
       return order;
     } catch (error) {
       throw new Error(`Failed to create order: ${error.message}`);
@@ -269,6 +325,72 @@ class OrderService extends BaseService {
       }
       const updated = await this.updateById(orderId, updateData);
 
+      // Send email notification for status change
+      try {
+        await updated.populate('user');
+        if (updated.user && updated.user.email) {
+          // Send status update email
+          await emailService.sendOrderStatusUpdateEmail({
+            userEmail: updated.user.email,
+            userName: updated.user.name,
+            orderData: {
+              orderNumber: updated.orderNumber || updated._id.toString(),
+              status: updated.status,
+              trackingNumber: updated.trackingNumber,
+              items: updated.items,
+              totals: updated.totals
+            }
+          });
+
+          // Send specific milestone emails for important status changes
+          if (status === constants.ORDER_STATUS.CONFIRMED && updated.payment?.status === 'completed') {
+            try {
+              await emailService.sendPaymentSuccessEmail({
+                userEmail: updated.user.email,
+                userName: updated.user.name,
+                orderData: {
+                  orderNumber: updated.orderNumber || updated._id.toString(),
+                  totals: updated.totals
+                }
+              });
+            } catch (e) {
+              console.error('Failed to send payment success email:', e);
+            }
+          }
+
+          if (status === 'shipped') {
+            try {
+              await emailService.sendOrderShippedEmail({
+                userEmail: updated.user.email,
+                userName: updated.user.name,
+                orderData: {
+                  orderNumber: updated.orderNumber || updated._id.toString(),
+                  trackingNumber: updated.trackingNumber
+                }
+              });
+            } catch (e) {
+              console.error('Failed to send order shipped email:', e);
+            }
+          }
+
+          if (status === 'delivered') {
+            try {
+              await emailService.sendOrderDeliveredEmail({
+                userEmail: updated.user.email,
+                userName: updated.user.name,
+                orderData: {
+                  orderNumber: updated.orderNumber || updated._id.toString()
+                }
+              });
+            } catch (e) {
+              console.error('Failed to send order delivered email:', e);
+            }
+          }
+        }
+      } catch (emailError) {
+        console.error('Failed to send order status update email:', emailError);
+      }
+
       // When an order is confirmed, send adoption certificates if applicable
       if (updated && status === constants.ORDER_STATUS.CONFIRMED) {
         try {
@@ -328,6 +450,35 @@ class OrderService extends BaseService {
           treeInfo,
           isGift: false
         });
+
+        // Check if this is user's first tree adoption
+        try {
+          await order.populate('user');
+          if (order.user) {
+            const userTreeCount = order.user.adoptedTrees?.length || 0;
+            if (userTreeCount === 1) {
+              await emailService.sendFirstTreeAdoptionEmail({
+                userEmail: order.customer.email,
+                userName: adopterName,
+                treeData: treeInfo
+              });
+            }
+
+            // Check for tree adoption milestones (5, 10, 25)
+            const treeMilestones = [5, 10, 25];
+            if (treeMilestones.includes(userTreeCount)) {
+              await emailService.sendTreeAdoptionMilestoneEmail({
+                userEmail: order.customer.email,
+                userName: adopterName,
+                milestoneData: {
+                  treeCount: userTreeCount
+                }
+              });
+            }
+          }
+        } catch (e) {
+          console.error('Failed to send tree adoption milestone email:', e);
+        }
       }
     }
   }
