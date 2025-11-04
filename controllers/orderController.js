@@ -107,8 +107,27 @@ exports.updatePaymentStatus = asyncHandler(async (req, res) => {
     });
   }
 
+  // Ensure payment object exists
+  if (!order.payment) {
+    order.payment = {
+      method: order.payment?.method || 'stripe',
+      amount: order.totals?.total || 0,
+      currency: order.payment?.currency || 'USD',
+      status: 'pending'
+    };
+  }
+
   order.payment.status = paymentStatus;
-  await order.save();
+  
+  try {
+    await order.save();
+  } catch (error) {
+    console.error('Error saving order with payment status:', error);
+    return res.status(400).json({
+      success: false,
+      error: `Failed to update payment status: ${error.message}`
+    });
+  }
 
   res.status(200).json({
     success: true,
