@@ -7,6 +7,7 @@ const {
   getUserOrders,
   getOrder,
   updateOrderStatus,
+  updatePaymentStatus,
   getAllOrders,
   processTUTPayment,
   debugTutBalance
@@ -19,6 +20,15 @@ router.post('/', protect, validateOrder, createOrder);
 router.get('/', protect, getUserOrders);
 router.get('/:id', protect, getOrder);
 router.put('/:id/status', protect, validateOrderUpdate, updateOrderStatus);
+router.put('/:id/payment-status', protect, (req, res, next) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      error: 'Access denied. Admin role required.'
+    });
+  }
+  next();
+}, updatePaymentStatus);
 router.post('/:id/process-tut-payment', protect, processTUTPayment);
 router.get('/debug-tut-balance', protect, debugTutBalance);
 

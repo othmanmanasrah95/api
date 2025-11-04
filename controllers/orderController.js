@@ -78,6 +78,45 @@ exports.updateOrderStatus = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc    Update payment status
+// @route   PUT /api/orders/:id/payment-status
+// @access  Private/Admin
+exports.updatePaymentStatus = asyncHandler(async (req, res) => {
+  const { paymentStatus } = req.body;
+  
+  if (!paymentStatus) {
+    return res.status(400).json({
+      success: false,
+      error: 'Payment status is required'
+    });
+  }
+
+  const validStatuses = ['pending', 'completed', 'failed', 'refunded', 'processing'];
+  if (!validStatuses.includes(paymentStatus)) {
+    return res.status(400).json({
+      success: false,
+      error: `Invalid payment status. Must be one of: ${validStatuses.join(', ')}`
+    });
+  }
+
+  const order = await orderService.findById(req.params.id);
+  if (!order) {
+    return res.status(404).json({
+      success: false,
+      error: 'Order not found'
+    });
+  }
+
+  order.payment.status = paymentStatus;
+  await order.save();
+
+  res.status(200).json({
+    success: true,
+    message: 'Payment status updated successfully',
+    data: order
+  });
+});
+
 // @desc    Get all orders (Admin)
 // @route   GET /api/orders/admin/all
 // @access  Private/Admin
