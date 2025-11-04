@@ -1,5 +1,6 @@
 const stripeService = require('../services/stripeService');
 const Order = require('../models/order');
+const orderService = require('../services/OrderService');
 const { validationResult } = require('express-validator');
 
 class StripeController {
@@ -18,7 +19,7 @@ class StripeController {
       }
 
       const { orderId, amount, currency = 'jod' } = req.body;
-      const userId = req.user.id;
+      const userId = req.user._id;
 
       // Find the order
       const order = await Order.findOne({ 
@@ -87,7 +88,7 @@ class StripeController {
   async confirmPayment(req, res) {
     try {
       const { paymentIntentId } = req.body;
-      const userId = req.user.id;
+      const userId = req.user._id;
 
       // Get payment intent from Stripe
       const paymentResult = await stripeService.getPaymentIntent(paymentIntentId);
@@ -118,10 +119,11 @@ class StripeController {
       // Update order based on payment status
       if (paymentIntent.status === 'succeeded') {
         order.payment.status = 'completed';
-        order.status = 'confirmed';
         order.payment.transactionId = paymentIntentId;
-        
         await order.save();
+        
+        // Update order status through service to trigger certificate emails
+        await orderService.updateOrderStatus(order._id, 'confirmed');
 
         res.json({
           success: true,
@@ -159,7 +161,7 @@ class StripeController {
   async cancelPayment(req, res) {
     try {
       const { paymentIntentId } = req.body;
-      const userId = req.user.id;
+      const userId = req.user._id;
 
       // Find the order
       const order = await Order.findOne({
@@ -212,7 +214,7 @@ class StripeController {
   async createRefund(req, res) {
     try {
       const { paymentIntentId, amount, reason } = req.body;
-      const userId = req.user.id;
+      const userId = req.user._id;
 
       // Find the order
       const order = await Order.findOne({
@@ -378,7 +380,7 @@ class StripeController {
   async getPaymentStatus(req, res) {
     try {
       const { paymentIntentId } = req.params;
-      const userId = req.user.id;
+      const userId = req.user._id;
 
       // Find the order
       const order = await Order.findOne({
