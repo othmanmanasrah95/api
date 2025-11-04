@@ -38,7 +38,7 @@ class StripeController {
       // Prepare order data for Stripe
       const orderData = {
         orderId: order._id.toString(),
-        userId: userId,
+        userId: String(userId),
         items: order.items,
         customer: order.customer,
         shipping: order.shipping
