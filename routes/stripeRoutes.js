@@ -7,7 +7,8 @@ const { body, param } = require('express-validator');
 // Validation middleware
 const validatePaymentIntent = [
   body('orderId').isMongoId().withMessage('Valid order ID is required'),
-  body('amount').isNumeric().isFloat({ min: 0.01 }).withMessage('Valid amount is required'),
+  // Amount is now optional - we use the order total from database for security
+  body('amount').optional().isNumeric().isFloat({ min: 0.01 }).withMessage('Valid amount is required'),
   body('currency').optional().isString().isLength({ min: 3, max: 3 }).withMessage('Currency must be 3 characters')
 ];
 

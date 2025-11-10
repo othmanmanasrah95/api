@@ -19,7 +19,7 @@ class StripeController {
         });
       }
 
-      const { orderId, amount, currency = 'usd' } = req.body;
+      const { orderId, currency = 'usd' } = req.body;
       const userId = req.user._id;
 
       // Find the order
@@ -27,7 +27,7 @@ class StripeController {
         _id: orderId, 
         user: userId,
         status: 'pending'
-      });
+      }).populate('user', 'name email');
 
       if (!order) {
         return res.status(404).json({
@@ -35,6 +35,41 @@ class StripeController {
           message: 'Order not found or not accessible'
         });
       }
+
+      // Use the order total from database (which includes discount) instead of frontend amount
+      // This ensures security and consistency - backend is the source of truth
+      const orderAmount = order.totals?.total || order.payment?.amount || 0;
+      let orderCurrency = (order.payment?.currency || currency || 'usd').toLowerCase();
+
+      // Validate order amount
+      if (orderAmount <= 0) {
+        console.error('Invalid order amount:', orderAmount, 'Order ID:', orderId);
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid order amount. Please contact support.'
+        });
+      }
+
+      // Stripe minimum amount validation (minimum $0.50 USD or equivalent)
+      const MINIMUM_AMOUNT = 0.50;
+      if (orderAmount < MINIMUM_AMOUNT) {
+        console.error('Order amount below Stripe minimum:', orderAmount, 'Order ID:', orderId);
+        return res.status(400).json({
+          success: false,
+          message: `Order amount must be at least $${MINIMUM_AMOUNT}. Current amount: $${orderAmount.toFixed(2)}`
+        });
+      }
+
+      // Ensure currency is lowercase for Stripe
+      orderCurrency = orderCurrency.toLowerCase();
+      
+      console.log('Creating payment intent for order:', {
+        orderId: order._id,
+        amount: orderAmount,
+        currency: orderCurrency,
+        discount: order.totals?.discount || 0,
+        subtotal: order.totals?.subtotal || 0
+      });
 
       // Prepare order data for Stripe
       const orderData = {
@@ -45,19 +80,34 @@ class StripeController {
         shipping: order.shipping
       };
 
-      // Create payment intent
+      // Create payment intent using order total from database
       const result = await stripeService.createPaymentIntent(
         orderData,
-        amount,
-        currency,
+        orderAmount,
+        orderCurrency,
         order.customer.email
       );
 
       if (!result.success) {
+        console.error('Payment intent creation failed:', {
+          orderId: orderId,
+          amount: orderAmount,
+          currency: orderCurrency,
+          error: result.error,
+          code: result.code,
+          type: result.type
+        });
+        
         return res.status(400).json({
           success: false,
-          message: 'Failed to create payment intent',
-          error: result.error
+          message: result.error || 'Failed to create payment intent',
+          error: result.error,
+          code: result.code,
+          details: {
+            orderId: orderId,
+            amount: orderAmount,
+            currency: orderCurrency
+          }
         });
       }
 

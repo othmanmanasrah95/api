@@ -15,9 +15,31 @@ class StripeService {
    */
   async createPaymentIntent(orderData, amount, currency = 'usd', customerEmail) {
     try {
+      // Validate amount
+      if (!amount || amount <= 0) {
+        throw new Error('Invalid amount: Amount must be greater than 0');
+      }
+
+      // Convert to cents and round to avoid floating point issues
+      const amountInCents = Math.round(amount * 100);
+      
+      if (amountInCents < 50) {
+        throw new Error(`Amount too small: Stripe requires minimum $0.50. Current: $${amount.toFixed(2)}`);
+      }
+
+      // Ensure currency is lowercase
+      const normalizedCurrency = currency.toLowerCase();
+
+      console.log('Creating Stripe Payment Intent:', {
+        amount: amount,
+        amountInCents: amountInCents,
+        currency: normalizedCurrency,
+        orderId: orderData.orderId
+      });
+
       const paymentIntent = await this.stripe.paymentIntents.create({
-        amount: Math.round(amount * 100), // Convert to cents
-        currency: currency.toLowerCase(),
+        amount: amountInCents,
+        currency: normalizedCurrency,
         metadata: {
           orderId: orderData.orderId,
           userId: orderData.userId,
@@ -32,6 +54,13 @@ class StripeService {
         description: `Order #${orderData.orderId} - ${orderData.items.length} items`,
       });
 
+      console.log('Payment Intent created successfully:', {
+        id: paymentIntent.id,
+        amount: paymentIntent.amount,
+        currency: paymentIntent.currency,
+        status: paymentIntent.status
+      });
+
       return {
         success: true,
         clientSecret: paymentIntent.client_secret,
@@ -41,11 +70,19 @@ class StripeService {
         status: paymentIntent.status
       };
     } catch (error) {
-      console.error('Stripe Payment Intent Creation Error:', error);
+      console.error('Stripe Payment Intent Creation Error:', {
+        message: error.message,
+        code: error.code,
+        type: error.type,
+        orderId: orderData.orderId,
+        amount: amount,
+        currency: currency
+      });
       return {
         success: false,
         error: error.message,
-        code: error.code
+        code: error.code,
+        type: error.type
       };
     }
   }

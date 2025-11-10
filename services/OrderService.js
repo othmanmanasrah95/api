@@ -10,6 +10,7 @@ const Discount = require('../models/discount');
 const tutPaymentService = require('./tutPaymentService');
 const constants = require('../config/constants');
 const emailService = require('../services/emailService');
+const TAX_RATE = constants.TAX_RATE || 0.08;
 
 class OrderService extends BaseService {
   constructor() {
@@ -63,6 +64,38 @@ class OrderService extends BaseService {
           if (discountAmount === 0) {
             throw new Error('Discount cannot be applied to this order');
           }
+
+          // Validate that discount won't make total below Stripe minimum ($0.50)
+          // Since tax = amountAfterDiscount * TAX_RATE
+          // Total = amountAfterDiscount + tax = amountAfterDiscount * (1 + TAX_RATE)
+          // For minimum: MINIMUM_TOTAL = amountAfterDiscount * (1 + TAX_RATE)
+          // So: minAmountAfterDiscount = MINIMUM_TOTAL / (1 + TAX_RATE)
+          // maxDiscount = discountableAmount - minAmountAfterDiscount
+          const MINIMUM_TOTAL = 0.50;
+          const TAX_RATE = constants.TAX_RATE || 0.08;
+          
+          if (!isTutTransaction) {
+            // Calculate minimum amount after discount (before tax) needed to meet Stripe minimum
+            const minAmountAfterDiscount = MINIMUM_TOTAL / (1 + TAX_RATE);
+            const maxDiscountAmount = Math.max(0, discountableAmount - minAmountAfterDiscount);
+            
+            // Check if discount would make total too small
+            const amountAfterDiscount = Math.max(0, discountableAmount - discountAmount);
+            const estimatedTax = this.calculateTax(amountAfterDiscount);
+            const estimatedTotal = amountAfterDiscount + estimatedTax;
+            
+            if (estimatedTotal < MINIMUM_TOTAL && estimatedTotal > 0) {
+              if (maxDiscountAmount <= 0) {
+                throw new Error(`This discount cannot be applied. The order total would be below the minimum payment amount of $${MINIMUM_TOTAL}.`);
+              }
+              
+              // Cap the discount to the maximum allowed
+              if (discountAmount > maxDiscountAmount) {
+                console.warn(`Discount ${discount.code} would make total too small ($${estimatedTotal.toFixed(2)}). Capping discount from $${discountAmount.toFixed(2)} to $${maxDiscountAmount.toFixed(2)}`);
+                discountAmount = maxDiscountAmount;
+              }
+            }
+          }
           
         } catch (discountError) {
           console.error('Error applying discount code:', discountError);
@@ -76,6 +109,14 @@ class OrderService extends BaseService {
       const tax = this.calculateTax(amountAfterDiscount);
       let total = amountAfterDiscount + tax;
       let tutTotal = tutSubtotal;
+
+      // Final validation that total meets Stripe minimum
+      if (!isTutTransaction) {
+        const MINIMUM_TOTAL = 0.50;
+        if (total > 0 && total < MINIMUM_TOTAL) {
+          throw new Error(`Order total ($${total.toFixed(2)}) is below the minimum payment amount of $${MINIMUM_TOTAL}. Please adjust your order or discount.`);
+        }
+      }
 
       // Validate TUT transaction requirements
       if (isTutTransaction) {
@@ -106,7 +147,7 @@ class OrderService extends BaseService {
         payment: {
           method: payment.method,
           amount: isTutTransaction ? tutTotal : total,
-          currency: isTutTransaction ? 'TUT' : payment.currency || 'USD',
+          currency: isTutTransaction ? 'TUT' : (payment.currency || 'USD').toUpperCase(),
           status: isTutTransaction ? 'pending' : 'pending'
         },
         specialInstructions: specialInstructions || '',
