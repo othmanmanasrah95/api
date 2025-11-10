@@ -13,7 +13,7 @@ class StripeService {
    * @param {string} customerEmail - Customer email
    * @returns {Promise<Object>} Payment intent object
    */
-  async createPaymentIntent(orderData, amount, currency = 'jod', customerEmail) {
+  async createPaymentIntent(orderData, amount, currency = 'usd', customerEmail) {
     try {
       const paymentIntent = await this.stripe.paymentIntents.create({
         amount: Math.round(amount * 100), // Convert to cents

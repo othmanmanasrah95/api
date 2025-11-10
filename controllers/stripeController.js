@@ -1,6 +1,7 @@
 const stripeService = require('../services/stripeService');
 const Order = require('../models/order');
-const orderService = require('../services/OrderService'); 
+const orderService = require('../services/OrderService');
+const emailService = require('../services/emailService');
 const { validationResult } = require('express-validator');
 
 class StripeController {
@@ -18,7 +19,7 @@ class StripeController {
         });
       }
 
-      const { orderId, amount, currency = 'jod' } = req.body;
+      const { orderId, amount, currency = 'usd' } = req.body;
       const userId = req.user._id;
 
       // Find the order
@@ -122,8 +123,27 @@ class StripeController {
         order.payment.transactionId = paymentIntentId;
         await order.save();
         
-        // Update order status through service to trigger certificate emails
+        // Update order status through service to trigger certificate emails and confirmation email
         await orderService.updateOrderStatus(order._id, 'confirmed');
+        
+        // Send payment confirmation email
+        try {
+          const User = require('../models/user');
+          const user = await User.findById(order.user);
+          if (user && user.email) {
+            await emailService.sendPaymentSuccessEmail({
+              userEmail: user.email,
+              userName: user.name,
+              orderData: {
+                orderNumber: order.orderNumber || order._id.toString(),
+                totals: order.totals
+              }
+            });
+          }
+        } catch (emailError) {
+          console.error('Failed to send payment confirmation email:', emailError);
+          // Don't fail the payment confirmation if email fails
+        }
 
         res.json({
           success: true,

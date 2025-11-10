@@ -58,7 +58,7 @@ class OrderService extends BaseService {
         payment: {
           method: payment.method,
           amount: isTutTransaction ? tutTotal : total,
-          currency: isTutTransaction ? 'TUT' : payment.currency || 'JOD',
+          currency: isTutTransaction ? 'TUT' : payment.currency || 'USD',
           status: isTutTransaction ? 'pending' : 'pending'
         },
         specialInstructions: specialInstructions || '',
@@ -151,7 +151,8 @@ class OrderService extends BaseService {
       let productData;
 
       if (item.type === 'product') {
-        if (item.id.startsWith('variant_')) {
+        // Handle product variants (olive oil, etc.)
+        if (item.id && item.id.startsWith('variant_')) {
           const variantId = item.id.replace('variant_', '');
           const variant = await ProductVariant.findById(variantId).populate('product');
           
@@ -167,19 +168,60 @@ class OrderService extends BaseService {
             price: variant.price,
             tutPrice: variant.tutPrice
           };
+        } else if (item.id && item.id.startsWith('olive-oil-')) {
+          // Handle olive oil product IDs that might not have variant_ prefix
+          const cleanId = item.id.replace('olive-oil-', '');
+          // Try to find as variant first
+          let variant = await ProductVariant.findById(cleanId).populate('product');
+          if (variant) {
+            product = variant.product;
+            productData = {
+              productId: product._id.toString(),
+              variantId: variant._id.toString(),
+              name: `${product.name} - ${variant.name}`,
+              price: variant.price,
+              tutPrice: variant.tutPrice
+            };
+          } else {
+            // Fallback to product lookup
+            product = await Product.findById(cleanId);
+            if (!product) {
+              // Use frontend-provided data as fallback
+              productData = {
+                productId: cleanId || item.id,
+                name: item.name || 'Product',
+                price: item.price,
+                tutPrice: item.tutPrice || null
+              };
+            } else {
+              productData = {
+                productId: product._id.toString(),
+                name: product.name,
+                price: product.price,
+                tutPrice: product.tutPrice
+              };
+            }
+          }
         } else {
+          // Regular product lookup
           product = await Product.findById(item.id);
           
           if (!product) {
-            throw new Error(`Product not found: ${item.id}`);
+            // Use frontend-provided data as fallback for mixed carts
+            productData = {
+              productId: item.id,
+              name: item.name || 'Product',
+              price: item.price,
+              tutPrice: item.tutPrice || null
+            };
+          } else {
+            productData = {
+              productId: product._id.toString(),
+              name: product.name,
+              price: product.price,
+              tutPrice: product.tutPrice
+            };
           }
-          
-          productData = {
-            productId: product._id.toString(),
-            name: product.name,
-            price: product.price,
-            tutPrice: product.tutPrice
-          };
         }
       } else if (item.type === 'tree') {
         // Tree adoption item

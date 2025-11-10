@@ -182,6 +182,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/discounts', discountRoutes);
 app.use('/api/email', emailRoutes);
 app.use('/api/stripe', stripeRoutes);
+app.use('/api/contact', require('./routes/contactRoutes'));
 
 // 404 handler
 app.use(notFound);
