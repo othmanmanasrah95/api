@@ -1,112 +1,35 @@
 const Discount = require('../models/discount');
 const User = require('../models/user');
 const { validationResult } = require('express-validator');
+const emailService = require('../services/emailService');
 
-// Generate discount code for TUT redemption
+// Generate discount code for TUT redemption (DEPRECATED - Admin only now)
+// This endpoint is kept for backward compatibility but should not be used
+// Discount codes should only be created by admins
 const generateDiscountForRedemption = async (req, res) => {
-  try {
-    const { tutAmount, userId } = req.body;
-    
-    // Validate input
-    if (!tutAmount || tutAmount < 100) {
-      return res.status(400).json({
-        success: false,
-        message: 'Minimum 100 TUT required for discount generation'
-      });
-    }
-    
-    // Calculate discount percentage (1% per 100 TUT, max 50%)
-    const percentage = Discount.calculateDiscountPercentage(tutAmount);
-    
-    if (percentage === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Insufficient TUT amount for discount'
-      });
-    }
-    
-    // Generate unique discount code
-    let code;
-    let isUnique = false;
-    let attempts = 0;
-    
-    while (!isUnique && attempts < 10) {
-      code = Discount.generateDiscountCode();
-      const existingDiscount = await Discount.findOne({ code });
-      if (!existingDiscount) {
-        isUnique = true;
-      }
-      attempts++;
-    }
-    
-    if (!isUnique) {
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to generate unique discount code'
-      });
-    }
-    
-    // Create discount
-    const discount = new Discount({
-      code,
-      percentage,
-      user: userId,
-      tutAmount,
-      createdBy: userId,
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
-      description: `TUT Redemption Discount - ${tutAmount} TUT tokens`
-    });
-    
-    await discount.save();
-    
-    res.status(201).json({
-      success: true,
-      message: 'Discount code generated successfully',
-      data: {
-        code: discount.code,
-        percentage: discount.percentage,
-        tutAmount: discount.tutAmount,
-        expiresAt: discount.expiresAt,
-        description: discount.description
-      }
-    });
-    
-  } catch (error) {
-    console.error('Error generating discount:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error',
-      error: error.message
-    });
-  }
+  return res.status(403).json({
+    success: false,
+    message: 'Discount code generation is now admin-only. Please contact an administrator.'
+  });
 };
 
-// Get user's discount codes
+// Get user's discount codes (only codes assigned to this user)
 const getUserDiscounts = async (req, res) => {
   try {
-    console.log('🔍 Getting user discounts for user:', req.user);
     const userId = req.user._id;
     const { status, page = 1, limit = 10 } = req.query;
     
-    console.log('📊 Query parameters:', { userId, status, page, limit });
-    
-    const query = { user: userId };
+    const query = { user: userId }; // Only get discounts assigned to this user
     if (status) {
       query.status = status;
     }
-    
-    console.log('🔍 Database query:', query);
     
     const discounts = await Discount.find(query)
       .sort({ createdAt: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit);
     
-    console.log('📋 Found discounts:', discounts.length);
-    
     const total = await Discount.countDocuments(query);
-    
-    console.log('📊 Total count:', total);
     
     res.json({
       success: true,
@@ -121,7 +44,7 @@ const getUserDiscounts = async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Error fetching user discounts:', error);
+    console.error('Error fetching user discounts:', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error',
@@ -159,6 +82,17 @@ const validateDiscountCode = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Discount code is no longer valid'
+      });
+    }
+    
+    // Check if user can use this discount (since we're using protect middleware, req.user will always be set)
+    // If discount has a user assigned, only that user can use it
+    // If discount.user is null, it's a general discount code that anyone can use
+    const userId = req.user._id;
+    if (discount.user && discount.user._id && discount.user._id.toString() !== userId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'This discount code is not available for your account'
       });
     }
     
@@ -220,7 +154,9 @@ const applyDiscountCode = async (req, res) => {
     }
     
     // Check if user can use this discount (if it's user-specific)
-    if (discount.user.toString() !== userId.toString()) {
+    // If discount has a user assigned, only that user can use it
+    // If discount.user is null, it's a general discount code that anyone can use
+    if (discount.user && discount.user.toString() !== userId.toString()) {
       return res.status(403).json({
         success: false,
         message: 'This discount code is not available for your account'
@@ -336,51 +272,105 @@ const createDiscountCode = async (req, res) => {
     const {
       code,
       percentage,
-      userEmail,
+      userEmail, // Optional - if not provided, code is general purpose
       maxUsage = 1,
       expiresAt,
       minOrderAmount = 0,
       maxDiscountAmount,
-      description
+      description,
+      sendEmail = false // Optional - send email to user if userEmail is provided
     } = req.body;
     
-    // Find user by email
-    const user = await User.findOne({ email: userEmail.toLowerCase() });
-    if (!user) {
-      return res.status(400).json({
-        success: false,
-        message: 'User not found with the provided email'
-      });
+    let user = null;
+    // If userEmail is provided, find and assign user
+    if (userEmail) {
+      user = await User.findOne({ email: userEmail.toLowerCase() });
+      if (!user) {
+        return res.status(400).json({
+          success: false,
+          message: 'User not found with the provided email'
+        });
+      }
     }
 
-    // Check if code already exists
-    const existingDiscount = await Discount.findOne({ code: code.toUpperCase() });
-    if (existingDiscount) {
-      return res.status(400).json({
-        success: false,
-        message: 'Discount code already exists'
-      });
+    // Generate code if not provided
+    let discountCode = code;
+    if (!discountCode) {
+      // Generate unique discount code
+      let isUnique = false;
+      let attempts = 0;
+      
+      while (!isUnique && attempts < 10) {
+        discountCode = Discount.generateDiscountCode();
+        const existingDiscount = await Discount.findOne({ code: discountCode });
+        if (!existingDiscount) {
+          isUnique = true;
+        }
+        attempts++;
+      }
+      
+      if (!isUnique) {
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to generate unique discount code'
+        });
+      }
+    } else {
+      // Check if code already exists
+      const existingDiscount = await Discount.findOne({ code: discountCode.toUpperCase() });
+      if (existingDiscount) {
+        return res.status(400).json({
+          success: false,
+          message: 'Discount code already exists'
+        });
+      }
     }
     
     const discount = new Discount({
-      code: code.toUpperCase(),
+      code: discountCode.toUpperCase(),
       percentage,
-      user: user._id,
+      user: user ? user._id : null, // Can be null for general discount codes
       createdBy: req.user._id,
       maxUsage,
       expiresAt: expiresAt ? new Date(expiresAt) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       minOrderAmount,
       maxDiscountAmount,
-      description: description || 'Manual Discount Code',
+      description: description || (user ? 'Admin Created Discount Code' : 'General Discount Code'),
       tutAmount: 0 // Default value for manual discount codes
     });
     
     await discount.save();
     
+    // Send email to user if requested and user is assigned
+    let emailSent = false;
+    if (sendEmail && user) {
+      try {
+        const emailResult = await emailService.sendDiscountCodeEmail(
+          user.email,
+          user.name,
+          {
+            code: discount.code,
+            percentage: discount.percentage,
+            expiresAt: discount.expiresAt,
+            description: discount.description,
+            minOrderAmount: discount.minOrderAmount,
+            maxDiscountAmount: discount.maxDiscountAmount
+          }
+        );
+        emailSent = emailResult.success;
+      } catch (emailError) {
+        console.error('Error sending discount code email:', emailError);
+        // Don't fail the request if email fails
+      }
+    }
+    
     res.status(201).json({
       success: true,
-      message: 'Discount code created successfully',
-      data: discount
+      message: 'Discount code created successfully' + (emailSent ? ' and email sent to user' : ''),
+      data: {
+        ...discount.toObject(),
+        emailSent
+      }
     });
     
   } catch (error) {

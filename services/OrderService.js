@@ -6,6 +6,7 @@ const Tree = require('../models/tree');
 const User = require('../models/user');
 const TokenBalance = require('../models/tokenBalance');
 const TokenTransaction = require('../models/tokenTransaction');
+const Discount = require('../models/discount');
 const tutPaymentService = require('./tutPaymentService');
 const constants = require('../config/constants');
 const emailService = require('../services/emailService');
@@ -18,15 +19,62 @@ class OrderService extends BaseService {
   // Create a new order with business logic
   async createOrder(orderData, userId) {
     try {
-      const { items, customer, shipping, payment, specialInstructions, isTutTransaction } = orderData;
+      const { items, customer, shipping, payment, specialInstructions, isTutTransaction, discountCode } = orderData;
 
       // Validate items and calculate totals
       const { orderItems, subtotal, tutSubtotal } = await this.validateAndCalculateItems(items);
 
-      // Calculate shipping and tax
+      // Calculate shipping
       const shippingCost = this.calculateShipping(subtotal, isTutTransaction);
-      const tax = this.calculateTax(subtotal);
-      const total = subtotal + shippingCost + tax;
+      let discountAmount = 0;
+      let discount = null;
+
+      // Apply discount code if provided (before tax calculation)
+      if (discountCode && !isTutTransaction) {
+        try {
+          discount = await Discount.findOne({ 
+            code: discountCode.toUpperCase(),
+            status: 'active'
+          });
+
+          if (!discount) {
+            throw new Error('Invalid or expired discount code');
+          }
+
+          // Check if discount is valid
+          if (!discount.isValid) {
+            throw new Error('Discount code is no longer valid');
+          }
+
+          // Check if user can use this discount (if it's user-specific)
+          if (discount.user && discount.user.toString() !== userId.toString()) {
+            throw new Error('This discount code is not available for your account');
+          }
+
+          // Check minimum order amount
+          if ((subtotal + shippingCost) < discount.minOrderAmount) {
+            throw new Error(`Minimum order amount of $${discount.minOrderAmount} required for this discount`);
+          }
+
+          // Calculate discount amount based on subtotal + shipping (before tax)
+          const discountableAmount = subtotal + shippingCost;
+          discountAmount = discount.calculateDiscount(discountableAmount);
+          
+          if (discountAmount === 0) {
+            throw new Error('Discount cannot be applied to this order');
+          }
+          
+        } catch (discountError) {
+          console.error('Error applying discount code:', discountError);
+          // Throw error to prevent order creation with invalid discount
+          throw new Error(`Discount code error: ${discountError.message}`);
+        }
+      }
+
+      // Calculate tax on discounted amount (subtotal + shipping - discount)
+      const amountAfterDiscount = Math.max(0, subtotal + shippingCost - discountAmount);
+      const tax = this.calculateTax(amountAfterDiscount);
+      let total = amountAfterDiscount + tax;
       let tutTotal = tutSubtotal;
 
       // Validate TUT transaction requirements
@@ -66,12 +114,20 @@ class OrderService extends BaseService {
           subtotal,
           shipping: shippingCost,
           tax,
+          discount: discountAmount,
           total: isTutTransaction ? tutTotal : total,
           tutTotal: tutTotal
         },
         status: constants.ORDER_STATUS.PENDING,
-        isTutTransaction: !!isTutTransaction
+        isTutTransaction: !!isTutTransaction,
+        discountCode: discountCode || undefined
       });
+
+      // Note: Discount is applied to order total, but not marked as "used" yet
+      // It will be marked as used when payment is confirmed (in order status update)
+      if (discount && discountAmount > 0) {
+        console.log(`✅ Applied discount code ${discount.code} (${discountAmount}) to order ${order._id}`);
+      }
 
       // If TUT transaction, deduct TUT from user's wallet balance
       if (isTutTransaction && tutTotal > 0) {
@@ -366,6 +422,33 @@ class OrderService extends BaseService {
         updateData.trackingNumber = trackingNumber;
       }
       const updated = await this.updateById(orderId, updateData);
+      
+      // If order is confirmed and has a discount code, mark it as used
+      if (status === constants.ORDER_STATUS.CONFIRMED && updated.discountCode) {
+        try {
+          const discount = await Discount.findOne({ 
+            code: updated.discountCode.toUpperCase()
+          });
+          
+          if (discount) {
+            // Mark discount as used (increment usage and link to order)
+            // This ensures the discount is only marked as used after successful payment
+            const userId = updated.user._id || updated.user;
+            
+            // Use the useDiscount method which handles usage tracking
+            try {
+              await discount.useDiscount(userId, orderId);
+              console.log(`✅ Marked discount code ${discount.code} as used for order ${orderId}`);
+            } catch (useError) {
+              // If discount is already used or invalid, log but don't fail
+              console.warn(`Discount ${discount.code} could not be marked as used: ${useError.message}`);
+            }
+          }
+        } catch (discountError) {
+          console.error('Error marking discount as used:', discountError);
+          // Don't fail order status update if discount marking fails
+        }
+      }
 
       // Send email notification for status change
       try {

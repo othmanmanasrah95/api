@@ -17,7 +17,8 @@ const discountSchema = new mongoose.Schema({
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: false,
+    default: null
   },
   tutAmount: {
     type: Number,
@@ -45,7 +46,7 @@ const discountSchema = new mongoose.Schema({
   },
   order: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Transaction',
+    ref: 'Order',
     default: null
   },
   maxUsage: {
@@ -81,6 +82,7 @@ const discountSchema = new mongoose.Schema({
 discountSchema.index({ user: 1, status: 1 });
 discountSchema.index({ expiresAt: 1 });
 discountSchema.index({ status: 1 });
+discountSchema.index({ code: 1 }); // Index for code lookup
 
 // Virtual for checking if discount is valid
 discountSchema.virtual('isValid').get(function() {
@@ -95,11 +97,15 @@ discountSchema.methods.useDiscount = function(userId, orderId) {
     throw new Error('Discount code is not valid');
   }
   
-  this.status = 'used';
-  this.usedAt = new Date();
+  this.currentUsage += 1;
   this.usedBy = userId;
   this.order = orderId;
-  this.currentUsage += 1;
+  
+  // Only mark as 'used' if it has reached max usage
+  if (this.currentUsage >= this.maxUsage) {
+    this.status = 'used';
+    this.usedAt = new Date();
+  }
   
   return this.save();
 };
@@ -124,8 +130,9 @@ discountSchema.methods.calculateDiscount = function(orderAmount) {
 };
 
 // Static method to generate unique discount code
-discountSchema.statics.generateDiscountCode = function() {
-  const prefix = 'TUT';
+discountSchema.statics.generateDiscountCode = function(prefix = 'DISC') {
+  // Default prefix changed from 'TUT' to 'DISC' for admin-generated codes
+  // Can be overridden for custom prefixes
   const timestamp = Date.now().toString(36).toUpperCase();
   const random = Math.random().toString(36).substring(2, 8).toUpperCase();
   return `${prefix}${timestamp}${random}`;

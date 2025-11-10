@@ -16,6 +16,7 @@ const { body } = require('express-validator');
 // Validation middleware
 const validateDiscountCreation = [
   body('code')
+    .optional()
     .isLength({ min: 3, max: 20 })
     .withMessage('Discount code must be between 3 and 20 characters')
     .matches(/^[A-Z0-9]+$/)
@@ -24,8 +25,9 @@ const validateDiscountCreation = [
     .isFloat({ min: 1, max: 100 })
     .withMessage('Percentage must be between 1 and 100'),
   body('userEmail')
+    .optional()
     .isEmail()
-    .withMessage('Valid user email is required'),
+    .withMessage('Valid user email is required if provided'),
   body('expiresAt')
     .optional()
     .isISO8601()
@@ -37,13 +39,18 @@ const validateDiscountCreation = [
   body('maxDiscountAmount')
     .optional()
     .isFloat({ min: 0 })
-    .withMessage('Maximum discount amount must be a positive number')
+    .withMessage('Maximum discount amount must be a positive number'),
+  body('sendEmail')
+    .optional()
+    .isBoolean()
+    .withMessage('Send email must be a boolean value')
 ];
 
-// Public routes
-router.post('/validate', validateDiscountCode);
+// Public routes - validate endpoint requires auth (since checkout requires auth)
+router.post('/validate', protect, validateDiscountCode);
 
 // User routes (authenticated)
+// Note: /generate endpoint is deprecated - discount codes are now admin-only
 router.post('/generate', protect, generateDiscountForRedemption);
 router.get('/my-discounts', protect, getUserDiscounts);
 router.post('/apply', protect, applyDiscountCode);

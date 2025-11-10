@@ -140,6 +140,10 @@ const orderSchema = new mongoose.Schema({
       type: Number,
       default: 0
     },
+    discount: {
+      type: Number,
+      default: 0
+    },
     total: {
       type: Number,
       required: true
@@ -148,6 +152,10 @@ const orderSchema = new mongoose.Schema({
       type: Number,
       default: 0
     }
+  },
+  discountCode: {
+    type: String,
+    default: null
   },
   specialInstructions: {
     type: String,

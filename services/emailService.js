@@ -1560,6 +1560,115 @@ class EmailService {
       </html>
     `;
   }
+
+  // Send discount code email
+  async sendDiscountCodeEmail(userEmail, userName, discountData) {
+    try {
+      if (!this.isConfigured()) {
+        console.warn('Email service not configured - RESEND_API_KEY missing');
+        return { success: false, error: 'Email service not configured' };
+      }
+
+      const { data, error } = await this.resend.emails.send({
+        from: `${this.fromName} <${this.fromEmail}>`,
+        to: [userEmail],
+        subject: `🎁 Your Exclusive Discount Code - ${discountData.percentage}% Off!`,
+        html: this.getDiscountCodeEmailTemplate(userName, discountData),
+      });
+
+      if (error) {
+        console.error('Error sending discount code email:', error);
+        return { success: false, error };
+      }
+
+      console.log('Discount code email sent successfully:', data);
+      return { success: true, data };
+    } catch (error) {
+      console.error('Error sending discount code email:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  getDiscountCodeEmailTemplate(userName, discountData) {
+    const expiresDate = new Date(discountData.expiresAt).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    
+    const minOrderText = discountData.minOrderAmount > 0 
+      ? `<p style="margin: 5px 0;"><strong>Minimum Order:</strong> $${discountData.minOrderAmount}</p>`
+      : '';
+    
+    const maxDiscountText = discountData.maxDiscountAmount 
+      ? `<p style="margin: 5px 0;"><strong>Maximum Discount:</strong> $${discountData.maxDiscountAmount}</p>`
+      : '';
+
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Your Discount Code</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
+          .discount-box { background: linear-gradient(135deg, #f3e8ff, #e9d5ff); border: 3px solid #8b5cf6; padding: 30px; border-radius: 12px; margin: 20px 0; text-align: center; }
+          .discount-code { font-size: 36px; font-weight: bold; color: #6d28d9; font-family: monospace; letter-spacing: 4px; margin: 15px 0; background: white; padding: 15px; border-radius: 8px; }
+          .percentage { font-size: 48px; font-weight: bold; color: #7c3aed; margin: 10px 0; }
+          .button { display: inline-block; background: #8b5cf6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+          .details { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: left; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🎁 Special Discount For You!</h1>
+            <p>Enjoy exclusive savings on your next purchase</p>
+          </div>
+          <div class="content">
+            <h2>Hello ${userName}!</h2>
+            <p>We're excited to offer you an exclusive discount code!</p>
+            
+            <div class="discount-box">
+              <div class="percentage">${discountData.percentage}% OFF</div>
+              <p style="margin: 10px 0; font-size: 18px; color: #6d28d9;">Your Discount Code:</p>
+              <div class="discount-code">${discountData.code}</div>
+              <p style="margin: 10px 0; color: #7c3aed;">Valid until ${expiresDate}</p>
+            </div>
+            
+            <div class="details">
+              <h3 style="margin-top: 0; color: #6d28d9;">Discount Details</h3>
+              ${discountData.description ? `<p style="margin: 5px 0;"><strong>Description:</strong> ${discountData.description}</p>` : ''}
+              ${minOrderText}
+              ${maxDiscountText}
+              <p style="margin: 5px 0;"><strong>Expires:</strong> ${expiresDate}</p>
+            </div>
+            
+            <p>Use this code at checkout to enjoy your discount on sustainable products from our marketplace!</p>
+            
+            <a href="${process.env.FRONTEND_URL || 'https://zeituna.com'}/marketplace" class="button">Shop Now</a>
+            
+            <p style="margin-top: 30px; font-size: 14px; color: #6b7280;">
+              <strong>How to use:</strong><br>
+              1. Add items to your cart<br>
+              2. Go to checkout<br>
+              3. Enter the discount code: <strong>${discountData.code}</strong><br>
+              4. Enjoy your savings!
+            </p>
+            
+            <p>Thank you for being a valued member of our community! 🌱</p>
+            
+            <p>Best regards,<br>The Zeituna Team</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
 }
 
 module.exports = new EmailService();
