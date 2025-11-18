@@ -1,6 +1,6 @@
 // Application constants and configuration
 // This file centralizes all hardcoded values for better maintainability
-
+// eslint-disable-next-line no-undef
 module.exports = {
   // Business Logic Constants
   TAX_RATE: parseFloat(process.env.TAX_RATE) || 0.08, // 8% tax rate
