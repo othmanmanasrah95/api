@@ -175,12 +175,18 @@ class StripeController {
   async confirmPayment(req, res) {
     try {
       const { paymentIntentId } = req.body;
-      const userId = req.user._id;
+      const userId = req.user ? req.user._id : null;
+
+      console.log('Confirming payment:', {
+        paymentIntentId,
+        userId: userId ? userId.toString() : 'guest'
+      });
 
       // Get payment intent from Stripe
       const paymentResult = await stripeService.getPaymentIntent(paymentIntentId);
       
       if (!paymentResult.success) {
+        console.error('Payment intent not found in Stripe:', paymentResult.error);
         return res.status(400).json({
           success: false,
           message: 'Payment intent not found',
@@ -190,13 +196,30 @@ class StripeController {
 
       const paymentIntent = paymentResult.paymentIntent;
 
-      // Find the order
-      const order = await Order.findOne({
-        'payment.transactionId': paymentIntentId,
-        user: userId
-      });
+      // Find the order - allow guest checkout (user can be null)
+      const orderQuery = {
+        'payment.transactionId': paymentIntentId
+      };
+      
+      // If user is logged in, verify they own the order
+      // If guest, allow orders with null user
+      if (userId) {
+        orderQuery.user = userId;
+      } else {
+        orderQuery.$or = [
+          { user: null },
+          { user: { $exists: false } }
+        ];
+      }
+
+      const order = await Order.findOne(orderQuery);
 
       if (!order) {
+        console.error('Order not found for payment intent:', {
+          paymentIntentId,
+          userId: userId ? userId.toString() : 'guest',
+          query: orderQuery
+        });
         return res.status(404).json({
           success: false,
           message: 'Order not found'
@@ -214,12 +237,24 @@ class StripeController {
         
         // Send payment confirmation email
         try {
-          const User = require('../models/user');
-          const user = await User.findById(order.user);
-          if (user && user.email) {
+          // For guest orders, use customer email from order
+          // For logged-in users, try to get user details but fallback to order customer email
+          let userEmail = order.customer?.email;
+          let userName = order.customer?.firstName || 'Customer';
+          
+          if (order.user) {
+            const User = require('../models/user');
+            const user = await User.findById(order.user);
+            if (user && user.email) {
+              userEmail = user.email;
+              userName = user.name || userName;
+            }
+          }
+          
+          if (userEmail) {
             await emailService.sendPaymentSuccessEmail({
-              userEmail: user.email,
-              userName: user.name,
+              userEmail: userEmail,
+              userName: userName,
               orderData: {
                 orderNumber: order.orderNumber || order._id.toString(),
                 totals: order.totals

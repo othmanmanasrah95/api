@@ -29,7 +29,7 @@ const validatePaymentIntentParam = [
 // Stripe payment routes (allow guest checkout)
 router.post('/create-payment-intent', optionalAuth, validatePaymentIntent, stripeController.createPaymentIntent);
 
-router.post('/confirm-payment', auth, stripeController.confirmPayment);
+router.post('/confirm-payment', optionalAuth, stripeController.confirmPayment);
 router.post('/cancel-payment', auth, stripeController.cancelPayment);
 router.post('/create-refund', auth, stripeController.createRefund);
 router.get('/payment-status/:paymentIntentId', auth, stripeController.getPaymentStatus);
