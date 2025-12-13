@@ -37,17 +37,85 @@ class StripeService {
         orderId: orderData.orderId
       });
 
+      // Helper function to compress items for Stripe metadata (500 char limit per field)
+      const compressItems = (items) => {
+        // First pass: minimal compression (name, quantity, type, id)
+        let compressed = items.map(item => ({
+          n: item.name.substring(0, 40), // Truncate name to 40 chars
+          q: item.quantity,
+          t: item.type,
+          id: item.productId || item.treeId || item.id
+        }));
+        
+        let jsonStr = JSON.stringify(compressed);
+        
+        // If still too long, split into chunks
+        if (jsonStr.length > 500) {
+          const chunks = [];
+          let chunk = [];
+          let chunkLength = 1; // Start with '[' 
+          
+          for (const item of compressed) {
+            const itemStr = JSON.stringify(item);
+            const neededLength = chunkLength + itemStr.length + (chunk.length > 0 ? 1 : 0); // +1 for comma if not first
+            
+            if (neededLength > 500 && chunk.length > 0) {
+              chunks.push(JSON.stringify(chunk));
+              chunk = [item];
+              chunkLength = itemStr.length + 1; // '[' + item
+            } else {
+              chunk.push(item);
+              chunkLength = neededLength;
+            }
+          }
+          
+          if (chunk.length > 0) {
+            chunks.push(JSON.stringify(chunk));
+          }
+          
+          return { chunks, isChunked: true };
+        }
+        
+        return { data: jsonStr, isChunked: false };
+      };
+
+      // Compress items
+      const itemsData = compressItems(orderData.items);
+      
+      // Build metadata object
+      const metadata = {
+        orderId: orderData.orderId,
+        userId: orderData.userId || '',
+        customerEmail: customerEmail,
+        customerName: `${orderData.customer.firstName} ${orderData.customer.lastName}`
+      };
+      
+      // Add items (either single field or chunks)
+      if (itemsData.isChunked) {
+        metadata.itemCount = orderData.items.length.toString();
+        metadata.itemsChunks = itemsData.chunks.length.toString();
+        itemsData.chunks.forEach((chunk, index) => {
+          metadata[`items_${index}`] = chunk;
+        });
+      } else {
+        metadata.items = itemsData.data;
+      }
+      
+      // Add shipping address (check length)
+      const shippingStr = JSON.stringify(orderData.shipping);
+      if (shippingStr.length <= 500) {
+        metadata.shippingAddress = shippingStr;
+      } else {
+        // Store key shipping fields separately
+        metadata.shippingCity = orderData.shipping.city || '';
+        metadata.shippingCountry = orderData.shipping.country || '';
+        metadata.shippingPostalCode = orderData.shipping.postalCode || '';
+      }
+
       const paymentIntent = await this.stripe.paymentIntents.create({
         amount: amountInCents,
         currency: normalizedCurrency,
-        metadata: {
-          orderId: orderData.orderId,
-          userId: orderData.userId,
-          customerEmail: customerEmail,
-          items: JSON.stringify(orderData.items),
-          customerName: `${orderData.customer.firstName} ${orderData.customer.lastName}`,
-          shippingAddress: JSON.stringify(orderData.shipping)
-        },
+        metadata: metadata,
         automatic_payment_methods: {
           enabled: true,
         },
