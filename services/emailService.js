@@ -178,14 +178,25 @@ class EmailService {
   // Send adoption certificate (self or gift)
   async sendAdoptionCertificateEmail({ recipientEmail, recipientName, adopterName, treeInfo, isGift }) {
     try {
+      console.log(`📧 EmailService: Preparing to send adoption certificate email`);
+      console.log(`   - Recipient: ${recipientEmail}`);
+      console.log(`   - Recipient Name: ${recipientName}`);
+      console.log(`   - Adopter Name: ${adopterName}`);
+      console.log(`   - Is Gift: ${isGift}`);
+      console.log(`   - Tree Info:`, treeInfo);
+
       if (!this.isConfigured()) {
-        console.warn('Email service not configured - RESEND_API_KEY missing');
+        console.warn('❌ Email service not configured - RESEND_API_KEY missing');
         return { success: false, error: 'Email service not configured' };
       }
 
       const subject = isGift
         ? `A Tree Has Been Adopted For You 🌳`
         : `Your Tree Adoption Certificate 🌳`;
+
+      console.log(`📧 EmailService: Sending email with subject: ${subject}`);
+      console.log(`📧 EmailService: From: ${this.fromName} <${this.fromEmail}>`);
+      console.log(`📧 EmailService: To: ${recipientEmail}`);
 
       const { data, error } = await this.resend.emails.send({
         from: `${this.fromName} <${this.fromEmail}>`,
@@ -195,13 +206,17 @@ class EmailService {
       });
 
       if (error) {
-        console.error('Error sending adoption certificate email:', error);
+        console.error('❌ EmailService: Error sending adoption certificate email:', error);
+        console.error('❌ EmailService: Error details:', JSON.stringify(error, null, 2));
         return { success: false, error };
       }
 
+      console.log('✅ EmailService: Adoption certificate email sent successfully');
+      console.log('✅ EmailService: Response data:', JSON.stringify(data, null, 2));
       return { success: true, data };
     } catch (error) {
-      console.error('Error sending adoption certificate email:', error);
+      console.error('❌ EmailService: Exception sending adoption certificate email:', error);
+      console.error('❌ EmailService: Error stack:', error.stack);
       return { success: false, error: error.message };
     }
   }

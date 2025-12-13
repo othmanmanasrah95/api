@@ -372,7 +372,7 @@ class OrderService extends BaseService {
       subtotal += itemTotal;
       tutSubtotal += itemTutTotal;
 
-      orderItems.push({
+      const orderItem = {
         ...productData,
         quantity: item.quantity,
         type: item.type,
@@ -382,7 +382,17 @@ class OrderService extends BaseService {
         adoptionFor: item.adoptionFor || 'self',
         giftRecipientName: item.giftRecipientName || '',
         giftRecipientEmail: item.giftRecipientEmail || ''
-      });
+      };
+
+      // Log gift adoption data for debugging
+      if (item.type === 'tree' && item.adoptionFor === 'gift') {
+        console.log('🎁 Gift adoption detected during order creation:');
+        console.log('   - Adoption for:', orderItem.adoptionFor);
+        console.log('   - Recipient name:', orderItem.giftRecipientName);
+        console.log('   - Recipient email:', orderItem.giftRecipientEmail);
+      }
+
+      orderItems.push(orderItem);
     }
 
     return { orderItems, subtotal, tutSubtotal };
@@ -580,9 +590,12 @@ class OrderService extends BaseService {
       if (updated && status === constants.ORDER_STATUS.CONFIRMED) {
         try {
           // Refresh the order from database to ensure all fields are present
-          const freshOrder = await this.findById(orderId);
+          // Use findById with explicit selection to ensure all fields are included
+          const freshOrder = await Order.findById(orderId).lean();
           if (freshOrder) {
             console.log(`📧 Sending certificates for order ${orderId}...`);
+            console.log(`📋 Order items count: ${freshOrder.items?.length || 0}`);
+            console.log(`📋 Full order data:`, JSON.stringify(freshOrder, null, 2));
             await this.sendCertificatesIfNeeded(freshOrder);
           } else {
             console.error(`❌ Order ${orderId} not found when trying to send certificates`);
@@ -633,27 +646,41 @@ class OrderService extends BaseService {
       const adopterName = `${order.customer?.firstName || ''} ${order.customer?.lastName || ''}`.trim() || 'Customer';
 
       // Check if this is a gift adoption with valid recipient email
-      const isGift = item.adoptionFor === 'gift' && item.giftRecipientEmail && item.giftRecipientEmail.trim() !== '';
+      const recipientEmail = item.giftRecipientEmail ? item.giftRecipientEmail.trim() : '';
+      const isGift = item.adoptionFor === 'gift' && recipientEmail !== '';
+      
+      console.log(`🔍 Checking adoption type for item:`, {
+        adoptionFor: item.adoptionFor,
+        recipientEmail: recipientEmail,
+        hasRecipientEmail: !!item.giftRecipientEmail,
+        isGift: isGift
+      });
       
       if (isGift) {
         // For gifts: Send certificate ONLY to the recipient
         // The buyer already received order confirmation email
-        console.log(`🎁 Sending gift certificate to recipient: ${item.giftRecipientEmail}`);
+        console.log(`🎁 Sending gift certificate to recipient: ${recipientEmail}`);
+        console.log(`   - Recipient name: ${item.giftRecipientName || 'Friend'}`);
+        console.log(`   - Adopter name: ${adopterName}`);
+        console.log(`   - Tree info:`, treeInfo);
+        
         try {
           const result = await emailService.sendAdoptionCertificateEmail({
-            recipientEmail: item.giftRecipientEmail,
+            recipientEmail: recipientEmail,
             recipientName: item.giftRecipientName || 'Friend',
             adopterName,
             treeInfo,
             isGift: true
           });
           if (result.success) {
-            console.log(`✅ Gift certificate sent successfully to ${item.giftRecipientEmail}`);
+            console.log(`✅ Gift certificate sent successfully to ${recipientEmail}`);
           } else {
             console.error(`❌ Failed to send gift certificate:`, result.error);
+            console.error(`   - Error details:`, JSON.stringify(result.error, null, 2));
           }
         } catch (emailErr) {
           console.error(`❌ Error sending gift certificate email:`, emailErr);
+          console.error(`   - Error stack:`, emailErr.stack);
         }
       } else {
         // For self adoption: Send certificate to the buyer/adopter
