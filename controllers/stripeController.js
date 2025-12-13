@@ -12,6 +12,7 @@ class StripeController {
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
+        console.error('Validation errors in createPaymentIntent:', errors.array());
         return res.status(400).json({
           success: false,
           message: 'Validation errors',
@@ -21,6 +22,13 @@ class StripeController {
 
       const { orderId, currency = 'usd' } = req.body;
       const userId = req.user ? req.user._id : null;
+
+      console.log('Creating payment intent request:', {
+        orderId,
+        currency,
+        userId: userId ? userId.toString() : 'guest',
+        hasStripeKey: !!process.env.STRIPE_SECRET_KEY && process.env.STRIPE_SECRET_KEY !== 'sk_test_placeholder'
+      });
 
       // Find the order (allow guest checkout - user can be null)
       const orderQuery = { 
@@ -42,6 +50,11 @@ class StripeController {
       const order = await Order.findOne(orderQuery).populate('user', 'name email');
 
       if (!order) {
+        console.error('Order not found:', {
+          orderId,
+          userId: userId ? userId.toString() : 'guest',
+          query: orderQuery
+        });
         return res.status(404).json({
           success: false,
           message: 'Order not found or not accessible'
@@ -92,6 +105,15 @@ class StripeController {
         shipping: order.shipping
       };
 
+      // Check if Stripe is properly configured
+      if (!process.env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY === 'sk_test_placeholder') {
+        console.error('Stripe secret key not configured');
+        return res.status(500).json({
+          success: false,
+          message: 'Payment service is not properly configured. Please contact support.'
+        });
+      }
+
       // Create payment intent using order total from database
       const result = await stripeService.createPaymentIntent(
         orderData,
@@ -107,7 +129,8 @@ class StripeController {
           currency: orderCurrency,
           error: result.error,
           code: result.code,
-          type: result.type
+          type: result.type,
+          stripeError: result.error
         });
         
         return res.status(400).json({
@@ -115,6 +138,7 @@ class StripeController {
           message: result.error || 'Failed to create payment intent',
           error: result.error,
           code: result.code,
+          type: result.type,
           details: {
             orderId: orderId,
             amount: orderAmount,

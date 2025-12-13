@@ -27,7 +27,7 @@ const validatePaymentIntentParam = [
 ];
 
 // Stripe payment routes (allow guest checkout)
-router.post('/create-payment-intent', optionalAuth, stripeController.createPaymentIntent);
+router.post('/create-payment-intent', optionalAuth, validatePaymentIntent, stripeController.createPaymentIntent);
 
 router.post('/confirm-payment', auth, stripeController.confirmPayment);
 router.post('/cancel-payment', auth, stripeController.cancelPayment);
