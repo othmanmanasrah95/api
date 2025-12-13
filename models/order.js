@@ -4,7 +4,7 @@ const orderSchema = new mongoose.Schema({
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: false
   },
   items: [{
     // Product purchase OR Tree adoption reference
@@ -157,9 +157,9 @@ const orderSchema = new mongoose.Schema({
     type: String,
     default: null
   },
-  specialInstructions: {
+  referredBy: {
     type: String,
-    default: ''
+    default: 'none'
   },
   isTutTransaction: {
     type: Boolean,

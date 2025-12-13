@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const stripeController = require('../controllers/stripeController');
-const { protect: auth } = require('../middleware/auth');
+const { protect: auth, optionalAuth } = require('../middleware/auth');
 const { body, param } = require('express-validator');
 
 // Validation middleware
@@ -26,8 +26,8 @@ const validatePaymentIntentParam = [
   param('paymentIntentId').isString().notEmpty().withMessage('Payment intent ID is required')
 ];
 
-// Stripe payment routes
-router.post('/create-payment-intent', auth, stripeController.createPaymentIntent);
+// Stripe payment routes (allow guest checkout)
+router.post('/create-payment-intent', optionalAuth, stripeController.createPaymentIntent);
 
 router.post('/confirm-payment', auth, stripeController.confirmPayment);
 router.post('/cancel-payment', auth, stripeController.cancelPayment);

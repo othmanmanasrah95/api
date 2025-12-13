@@ -20,14 +20,26 @@ class StripeController {
       }
 
       const { orderId, currency = 'usd' } = req.body;
-      const userId = req.user._id;
+      const userId = req.user ? req.user._id : null;
 
-      // Find the order
-      const order = await Order.findOne({ 
+      // Find the order (allow guest checkout - user can be null)
+      const orderQuery = { 
         _id: orderId, 
-        user: userId,
         status: 'pending'
-      }).populate('user', 'name email');
+      };
+      
+      // If user is logged in, verify they own the order
+      // If guest, allow orders with null user
+      if (userId) {
+        orderQuery.user = userId;
+      } else {
+        orderQuery.$or = [
+          { user: null },
+          { user: { $exists: false } }
+        ];
+      }
+      
+      const order = await Order.findOne(orderQuery).populate('user', 'name email');
 
       if (!order) {
         return res.status(404).json({
@@ -74,7 +86,7 @@ class StripeController {
       // Prepare order data for Stripe
       const orderData = {
         orderId: order._id.toString(),
-        userId: String(userId),
+        userId: userId ? String(userId) : null,
         items: order.items,
         customer: order.customer,
         shipping: order.shipping

@@ -21,6 +21,31 @@ exports.protect = async (req, res, next) => {
   }
 };
 
+// @desc    Optional authentication - sets req.user if token is provided, but doesn't fail if not
+// @access  Public (optional auth)
+exports.optionalAuth = async (req, res, next) => {
+  let token;
+
+  if (
+    req.headers.authorization &&
+    req.headers.authorization.startsWith('Bearer')
+  ) {
+    try {
+      token = req.headers.authorization.split(' ')[1];
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      req.user = await User.findById(decoded.userId || decoded.id).select('-password');
+    } catch (error) {
+      // If token is invalid, just continue without user (guest checkout)
+      req.user = null;
+    }
+  } else {
+    // No token provided, continue as guest
+    req.user = null;
+  }
+  
+  next();
+};
+
 // @desc    Authorize admin access
 // @access  Private/Admin
 exports.authorize = (...roles) => {

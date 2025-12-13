@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { protect } = require('../middleware/auth');
+const { protect, optionalAuth } = require('../middleware/auth');
 const { validateOrder, validateOrderUpdate } = require('../middleware/validation');
 const {
   createOrder,
@@ -13,10 +13,10 @@ const {
   debugTutBalance
 } = require('../controllers/orderController');
 
-// Public routes (none for orders)
+// Public routes (guest checkout allowed)
+router.post('/', optionalAuth, validateOrder, createOrder);
 
 // Protected routes
-router.post('/', protect, validateOrder, createOrder);
 router.get('/', protect, getUserOrders);
 router.get('/:id', protect, getOrder);
 router.put('/:id/status', protect, validateOrderUpdate, updateOrderStatus);

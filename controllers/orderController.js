@@ -4,12 +4,14 @@ const { asyncHandler } = require('../middleware/errorHandler');
 
 // @desc    Create new order
 // @route   POST /api/orders
-// @access  Private
+// @access  Public (guest checkout allowed)
 exports.createOrder = asyncHandler(async (req, res) => {
   console.log('Order creation request body:', JSON.stringify(req.body, null, 2));
   console.log('User making request:', req.user);
   
-  const order = await orderService.createOrder(req.body, req.user._id);
+  // Allow guest checkout - userId can be null
+  const userId = req.user ? req.user._id : null;
+  const order = await orderService.createOrder(req.body, userId);
 
   res.status(201).json({
     success: true,

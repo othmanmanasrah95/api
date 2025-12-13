@@ -20,7 +20,7 @@ class OrderService extends BaseService {
   // Create a new order with business logic
   async createOrder(orderData, userId) {
     try {
-      const { items, customer, shipping, payment, specialInstructions, isTutTransaction, discountCode } = orderData;
+      const { items, customer, shipping, payment, referredBy, isTutTransaction, discountCode } = orderData;
 
       // Validate items and calculate totals
       const { orderItems, subtotal, tutSubtotal } = await this.validateAndCalculateItems(items);
@@ -48,8 +48,14 @@ class OrderService extends BaseService {
           }
 
           // Check if user can use this discount (if it's user-specific)
-          if (discount.user && discount.user.toString() !== userId.toString()) {
-            throw new Error('This discount code is not available for your account');
+          // Guest users cannot use user-specific discounts
+          if (discount.user) {
+            if (!userId) {
+              throw new Error('This discount code requires an account. Please log in to use it.');
+            }
+            if (discount.user.toString() !== userId.toString()) {
+              throw new Error('This discount code is not available for your account');
+            }
           }
 
           // Check minimum order amount
@@ -119,7 +125,11 @@ class OrderService extends BaseService {
       }
 
       // Validate TUT transaction requirements
+      // Guest users cannot use TUT transactions
       if (isTutTransaction) {
+        if (!userId) {
+          throw new Error('TUT transactions require an account. Please log in to use TUT tokens.');
+        }
         await this.validateTutTransaction(userId);
         
         // For TUT transactions, use the payment amount from frontend if provided
@@ -150,7 +160,7 @@ class OrderService extends BaseService {
           currency: isTutTransaction ? 'TUT' : (payment.currency || 'USD').toUpperCase(),
           status: isTutTransaction ? 'pending' : 'pending'
         },
-        specialInstructions: specialInstructions || '',
+        referredBy: referredBy || 'none',
         totals: {
           subtotal,
           shipping: shippingCost,
