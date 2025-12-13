@@ -579,9 +579,17 @@ class OrderService extends BaseService {
       // When an order is confirmed, send adoption certificates if applicable
       if (updated && status === constants.ORDER_STATUS.CONFIRMED) {
         try {
-          await this.sendCertificatesIfNeeded(updated);
+          // Refresh the order from database to ensure all fields are present
+          const freshOrder = await this.findById(orderId);
+          if (freshOrder) {
+            console.log(`📧 Sending certificates for order ${orderId}...`);
+            await this.sendCertificatesIfNeeded(freshOrder);
+          } else {
+            console.error(`❌ Order ${orderId} not found when trying to send certificates`);
+          }
         } catch (e) {
-          console.error('Failed to send adoption certificates:', e);
+          console.error('❌ Failed to send adoption certificates:', e);
+          console.error('Error details:', e.stack);
         }
       }
 
@@ -593,13 +601,28 @@ class OrderService extends BaseService {
 
   async sendCertificatesIfNeeded(order) {
     const treeItems = (order.items || []).filter(i => i.type === 'tree');
-    if (treeItems.length === 0) return;
+    if (treeItems.length === 0) {
+      console.log('📋 No tree items found in order, skipping certificate sending');
+      return;
+    }
+
+    console.log(`🌳 Found ${treeItems.length} tree item(s) in order ${order._id}`);
 
     for (const item of treeItems) {
+      console.log(`📦 Processing tree item: ${item.name || 'Unknown'}`);
+      console.log(`   - Adoption type: ${item.adoptionFor || 'self'}`);
+      console.log(`   - Gift recipient email: ${item.giftRecipientEmail || 'N/A'}`);
+      console.log(`   - Gift recipient name: ${item.giftRecipientName || 'N/A'}`);
+
       // Load tree info for richer certificate details
       let tree = null;
       if (item.treeId) {
-        try { tree = await Tree.findById(item.treeId); } catch (_) { /* ignore */ }
+        try { 
+          tree = await Tree.findById(item.treeId); 
+          console.log(`   - Tree found: ${tree?.name || 'Unknown'}`);
+        } catch (err) { 
+          console.warn(`   - Could not load tree ${item.treeId}:`, err.message);
+        }
       }
       const treeInfo = tree ? {
         name: tree.name,
@@ -607,27 +630,50 @@ class OrderService extends BaseService {
         species: tree.species
       } : { name: item.name?.replace('Tree Adoption - ', ''), location: 'Palestine', species: 'Olive' };
 
-      const adopterName = `${order.customer.firstName} ${order.customer.lastName}`.trim();
+      const adopterName = `${order.customer?.firstName || ''} ${order.customer?.lastName || ''}`.trim() || 'Customer';
 
-      if (item.adoptionFor === 'gift' && item.giftRecipientEmail) {
+      // Check if this is a gift adoption with valid recipient email
+      const isGift = item.adoptionFor === 'gift' && item.giftRecipientEmail && item.giftRecipientEmail.trim() !== '';
+      
+      if (isGift) {
         // For gifts: Send certificate ONLY to the recipient
         // The buyer already received order confirmation email
-        await emailService.sendAdoptionCertificateEmail({
-          recipientEmail: item.giftRecipientEmail,
-          recipientName: item.giftRecipientName || 'Friend',
-          adopterName,
-          treeInfo,
-          isGift: true
-        });
+        console.log(`🎁 Sending gift certificate to recipient: ${item.giftRecipientEmail}`);
+        try {
+          const result = await emailService.sendAdoptionCertificateEmail({
+            recipientEmail: item.giftRecipientEmail,
+            recipientName: item.giftRecipientName || 'Friend',
+            adopterName,
+            treeInfo,
+            isGift: true
+          });
+          if (result.success) {
+            console.log(`✅ Gift certificate sent successfully to ${item.giftRecipientEmail}`);
+          } else {
+            console.error(`❌ Failed to send gift certificate:`, result.error);
+          }
+        } catch (emailErr) {
+          console.error(`❌ Error sending gift certificate email:`, emailErr);
+        }
       } else {
         // For self adoption: Send certificate to the buyer/adopter
-        await emailService.sendAdoptionCertificateEmail({
-          recipientEmail: order.customer.email,
-          recipientName: adopterName,
-          adopterName,
-          treeInfo,
-          isGift: false
-        });
+        console.log(`👤 Sending self-adoption certificate to buyer: ${order.customer?.email || 'N/A'}`);
+        try {
+          const result = await emailService.sendAdoptionCertificateEmail({
+            recipientEmail: order.customer.email,
+            recipientName: adopterName,
+            adopterName,
+            treeInfo,
+            isGift: false
+          });
+          if (result.success) {
+            console.log(`✅ Self-adoption certificate sent successfully to ${order.customer.email}`);
+          } else {
+            console.error(`❌ Failed to send self-adoption certificate:`, result.error);
+          }
+        } catch (emailErr) {
+          console.error(`❌ Error sending self-adoption certificate email:`, emailErr);
+        }
 
         // Check if this is user's first tree adoption
         try {
