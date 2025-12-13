@@ -185,14 +185,17 @@ class OrderService extends BaseService {
         await this.deductTutFromWallet(userId, tutTotal, order._id);
       }
 
-      // Send order confirmation email and check for milestones
+      // Send order confirmation email to the buyer (person who placed the order)
+      // This should always be sent to order.customer.email, regardless of login status
       try {
-        const user = await User.findById(userId);
-        if (user && user.email) {
-          // Send order confirmation
+        const buyerEmail = order.customer?.email;
+        const buyerName = `${order.customer?.firstName || ''} ${order.customer?.lastName || ''}`.trim() || 'Customer';
+        
+        if (buyerEmail) {
+          // Always send order confirmation to the buyer
           await emailService.sendOrderConfirmationEmail({
-            userEmail: user.email,
-            userName: user.name,
+            userEmail: buyerEmail,
+            userName: buyerName,
             orderData: {
               orderNumber: order.orderNumber || order._id.toString(),
               items: order.items,
@@ -204,35 +207,41 @@ class OrderService extends BaseService {
             }
           });
 
-          // Check if this is user's first order
-          const userOrderCount = await this.model.countDocuments({ user: userId });
-          if (userOrderCount === 1) {
-            try {
-              await emailService.sendFirstOrderEmail({
-                userEmail: user.email,
-                userName: user.name,
-                orderData: {
-                  orderNumber: order.orderNumber || order._id.toString()
+          // For logged-in users, also check for milestones
+          if (userId) {
+            const user = await User.findById(userId);
+            if (user && user.email) {
+              // Check if this is user's first order
+              const userOrderCount = await this.model.countDocuments({ user: userId });
+              if (userOrderCount === 1) {
+                try {
+                  await emailService.sendFirstOrderEmail({
+                    userEmail: user.email,
+                    userName: user.name,
+                    orderData: {
+                      orderNumber: order.orderNumber || order._id.toString()
+                    }
+                  });
+                } catch (e) {
+                  console.error('Failed to send first order email:', e);
                 }
-              });
-            } catch (e) {
-              console.error('Failed to send first order email:', e);
-            }
-          }
+              }
 
-          // Check for order milestones (10, 25, 50, 100)
-          const milestones = [10, 25, 50, 100];
-          if (milestones.includes(userOrderCount)) {
-            try {
-              await emailService.sendOrderMilestoneEmail({
-                userEmail: user.email,
-                userName: user.name,
-                milestoneData: {
-                  orderCount: userOrderCount
+              // Check for order milestones (10, 25, 50, 100)
+              const milestones = [10, 25, 50, 100];
+              if (milestones.includes(userOrderCount)) {
+                try {
+                  await emailService.sendOrderMilestoneEmail({
+                    userEmail: user.email,
+                    userName: user.name,
+                    milestoneData: {
+                      orderCount: userOrderCount
+                    }
+                  });
+                } catch (e) {
+                  console.error('Failed to send order milestone email:', e);
                 }
-              });
-            } catch (e) {
-              console.error('Failed to send order milestone email:', e);
+              }
             }
           }
         }
@@ -601,7 +610,8 @@ class OrderService extends BaseService {
       const adopterName = `${order.customer.firstName} ${order.customer.lastName}`.trim();
 
       if (item.adoptionFor === 'gift' && item.giftRecipientEmail) {
-        // Send certificate to recipient
+        // For gifts: Send certificate ONLY to the recipient
+        // The buyer already received order confirmation email
         await emailService.sendAdoptionCertificateEmail({
           recipientEmail: item.giftRecipientEmail,
           recipientName: item.giftRecipientName || 'Friend',
@@ -609,16 +619,8 @@ class OrderService extends BaseService {
           treeInfo,
           isGift: true
         });
-        // Send confirmation certificate to the purchaser as well
-        await emailService.sendAdoptionCertificateEmail({
-          recipientEmail: order.customer.email,
-          recipientName: adopterName,
-          adopterName,
-          treeInfo,
-          isGift: true
-        });
       } else {
-        // Send certificate to adopter (self)
+        // For self adoption: Send certificate to the buyer/adopter
         await emailService.sendAdoptionCertificateEmail({
           recipientEmail: order.customer.email,
           recipientName: adopterName,
