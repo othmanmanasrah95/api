@@ -18,11 +18,102 @@ class EmailService {
     this.fromEmail = isCustomDomain ? 'onboarding@resend.dev' : configuredEmail;
     this.fromName = process.env.FROM_NAME || 'Zeituna Platform';
     this.supportEmail = process.env.SUPPORT_EMAIL || 'hello@zeituna.com';
+    
+    // Email queue system to respect Resend's rate limit (2 requests per second)
+    this.emailQueue = [];
+    this.isProcessingQueue = false;
+    this.lastEmailSentAt = 0;
+    this.minDelayBetweenEmails = 500; // 500ms = max 2 requests per second
   }
 
   // Helper method to check if email service is configured
   isConfigured() {
     return this.resend !== null;
+  }
+
+  // Queue processing methods for rate limiting
+  /**
+   * Enqueue an email to be sent through the rate-limited queue
+   * @param {Function} sendFunction - Function that returns a promise for sending the email
+   * @returns {Promise} Promise that resolves when the email is sent
+   */
+  async enqueueEmail(sendFunction) {
+    return new Promise((resolve, reject) => {
+      const queueLength = this.emailQueue.length;
+      this.emailQueue.push({
+        sendFunction,
+        resolve,
+        reject,
+        timestamp: Date.now()
+      });
+      
+      if (queueLength > 0) {
+        console.log(`📧 EmailService: Email queued. Queue length: ${this.emailQueue.length}`);
+      }
+      
+      // Start processing if not already processing
+      if (!this.isProcessingQueue) {
+        this.processQueue();
+      }
+    });
+  }
+
+  /**
+   * Process the email queue at a rate of max 2 requests per second
+   */
+  async processQueue() {
+    if (this.isProcessingQueue || this.emailQueue.length === 0) {
+      return;
+    }
+
+    this.isProcessingQueue = true;
+    console.log(`📧 EmailService: Starting queue processing. Queue length: ${this.emailQueue.length}`);
+
+    while (this.emailQueue.length > 0) {
+      const now = Date.now();
+      const timeSinceLastEmail = now - this.lastEmailSentAt;
+      
+      // Wait if we've sent an email too recently (respect rate limit of 2 req/sec)
+      if (timeSinceLastEmail < this.minDelayBetweenEmails) {
+        const waitTime = this.minDelayBetweenEmails - timeSinceLastEmail;
+        console.log(`📧 EmailService: Rate limiting - waiting ${waitTime}ms before next email`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+
+      const emailTask = this.emailQueue.shift();
+      this.lastEmailSentAt = Date.now();
+      const remainingInQueue = this.emailQueue.length;
+      
+      if (remainingInQueue > 0) {
+        console.log(`📧 EmailService: Processing email. ${remainingInQueue} remaining in queue`);
+      }
+
+      try {
+        const result = await emailTask.sendFunction();
+        emailTask.resolve(result);
+      } catch (error) {
+        console.error(`📧 EmailService: Error in queued email send:`, error);
+        emailTask.reject(error);
+      }
+    }
+
+    this.isProcessingQueue = false;
+    console.log(`📧 EmailService: Queue processing complete`);
+  }
+
+  /**
+   * Wrapper for resend.emails.send that goes through the queue
+   * @param {Object} emailData - Email data to send
+   * @returns {Promise} Promise with { data, error } format from Resend
+   */
+  async sendEmailQueued(emailData) {
+    if (!this.isConfigured()) {
+      return { data: null, error: { message: 'Email service not configured' } };
+    }
+
+    return this.enqueueEmail(() => {
+      return this.resend.emails.send(emailData);
+    });
   }
 
   // Send welcome email to new users
@@ -33,7 +124,7 @@ class EmailService {
         return { success: false, error: 'Email service not configured' };
       }
 
-      const { data, error } = await this.resend.emails.send({
+      const { data, error } = await this.sendEmailQueued({
         from: `${this.fromName} <${this.fromEmail}>`,
         to: [userEmail],
         subject: 'Welcome to Zeituna - Your Sustainable Journey Begins! 🌱',
@@ -61,7 +152,7 @@ class EmailService {
         return { success: false, error: 'Email service not configured' };
       }
 
-      const { data, error } = await this.resend.emails.send({
+      const { data, error } = await this.sendEmailQueued({
         from: `${this.fromName} <${this.fromEmail}>`,
         to: [userEmail],
         subject: 'Verify your email address',
@@ -89,7 +180,7 @@ class EmailService {
         return { success: false, error: 'Email service not configured' };
       }
 
-      const { data, error } = await this.resend.emails.send({
+      const { data, error } = await this.sendEmailQueued({
         from: `${this.fromName} <${this.fromEmail}>`,
         to: [userEmail],
         subject: `Order Confirmation - ${orderData.orderNumber}`,
@@ -127,7 +218,7 @@ class EmailService {
         refunded: 'Your order has been refunded'
       };
 
-      const { data, error } = await this.resend.emails.send({
+      const { data, error } = await this.sendEmailQueued({
         from: `${this.fromName} <${this.fromEmail}>`,
         to: [userEmail],
         subject: `Order Update - ${orderData.orderNumber}: ${statusMessages[orderData.status] || 'Status Updated'}`,
@@ -155,7 +246,7 @@ class EmailService {
         return { success: false, error: 'Email service not configured' };
       }
 
-      const { data, error } = await this.resend.emails.send({
+      const { data, error } = await this.sendEmailQueued({
         from: `${this.fromName} <${this.fromEmail}>`,
         to: [userEmail],
         subject: `Tree Adoption Confirmed - ${treeData.name} 🌳`,
@@ -198,7 +289,7 @@ class EmailService {
       console.log(`📧 EmailService: From: ${this.fromName} <${this.fromEmail}>`);
       console.log(`📧 EmailService: To: ${recipientEmail}`);
 
-      const { data, error } = await this.resend.emails.send({
+      const { data, error } = await this.sendEmailQueued({
         from: `${this.fromName} <${this.fromEmail}>`,
         to: [recipientEmail],
         subject,
@@ -231,7 +322,7 @@ class EmailService {
 
       const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
       
-      const { data, error } = await this.resend.emails.send({
+      const { data, error } = await this.sendEmailQueued({
         from: `${this.fromName} <${this.fromEmail}>`,
         to: [userEmail],
         subject: 'Reset Your Zeituna Password',
@@ -259,7 +350,7 @@ class EmailService {
         return { success: false, error: 'Email service not configured' };
       }
 
-      const { data, error } = await this.resend.emails.send({
+      const { data, error } = await this.sendEmailQueued({
         from: `${this.fromName} <${this.fromEmail}>`,
         to: [userEmail],
         subject: `You've Earned ${rewardData.amount} TUT Tokens! 🎉`,
@@ -287,7 +378,7 @@ class EmailService {
         return { success: false, error: 'Email service not configured' };
       }
 
-      const { data, error } = await this.resend.emails.send({
+      const { data, error } = await this.sendEmailQueued({
         from: `${this.fromName} <${this.fromEmail}>`,
         to: [userEmail],
         subject: notificationData.subject || 'New Update from Zeituna Marketplace',
@@ -316,7 +407,7 @@ class EmailService {
         return { success: false, error: 'Email service not configured' };
       }
 
-      const { data, error } = await this.resend.emails.send({
+      const { data, error } = await this.sendEmailQueued({
         from: `${this.fromName} <${this.fromEmail}>`,
         to: [userEmail],
         subject: '🎉 Congratulations on Your First Order!',
@@ -343,7 +434,7 @@ class EmailService {
         return { success: false, error: 'Email service not configured' };
       }
 
-      const { data, error } = await this.resend.emails.send({
+      const { data, error } = await this.sendEmailQueued({
         from: `${this.fromName} <${this.fromEmail}>`,
         to: [userEmail],
         subject: `✅ Payment Successful - Order #${orderData.orderNumber}`,
@@ -369,7 +460,7 @@ class EmailService {
         return { success: false, error: 'Email service not configured' };
       }
 
-      const { data, error } = await this.resend.emails.send({
+      const { data, error } = await this.sendEmailQueued({
         from: `${this.fromName} <${this.fromEmail}>`,
         to: [userEmail],
         subject: `📦 Your Order #${orderData.orderNumber} Has Shipped!`,
@@ -395,7 +486,7 @@ class EmailService {
         return { success: false, error: 'Email service not configured' };
       }
 
-      const { data, error } = await this.resend.emails.send({
+      const { data, error } = await this.sendEmailQueued({
         from: `${this.fromName} <${this.fromEmail}>`,
         to: [userEmail],
         subject: `🎉 Your Order #${orderData.orderNumber} Has Been Delivered!`,
@@ -421,7 +512,7 @@ class EmailService {
         return { success: false, error: 'Email service not configured' };
       }
 
-      const { data, error } = await this.resend.emails.send({
+      const { data, error } = await this.sendEmailQueued({
         from: `${this.fromName} <${this.fromEmail}>`,
         to: [userEmail],
         subject: '🌳 Congratulations on Your First Tree Adoption!',
@@ -447,7 +538,7 @@ class EmailService {
         return { success: false, error: 'Email service not configured' };
       }
 
-      const { data, error } = await this.resend.emails.send({
+      const { data, error } = await this.sendEmailQueued({
         from: `${this.fromName} <${this.fromEmail}>`,
         to: [userEmail],
         subject: `🎊 Amazing Milestone: ${milestoneData.orderCount} Orders!`,
@@ -473,7 +564,7 @@ class EmailService {
         return { success: false, error: 'Email service not configured' };
       }
 
-      const { data, error } = await this.resend.emails.send({
+      const { data, error } = await this.sendEmailQueued({
         from: `${this.fromName} <${this.fromEmail}>`,
         to: [userEmail],
         subject: `🌲 Tree Champion: ${milestoneData.treeCount} Trees Adopted!`,
@@ -499,7 +590,7 @@ class EmailService {
         return { success: false, error: 'Email service not configured' };
       }
 
-      const { data, error } = await this.resend.emails.send({
+      const { data, error } = await this.sendEmailQueued({
         from: `${this.fromName} <${this.fromEmail}>`,
         to: [userEmail],
         subject: `🪙 Token Milestone: ${milestoneData.tokenAmount} TUT Tokens Earned!`,
@@ -525,7 +616,7 @@ class EmailService {
         return { success: false, error: 'Email service not configured' };
       }
 
-      const { data, error } = await this.resend.emails.send({
+      const { data, error } = await this.sendEmailQueued({
         from: `${this.fromName} <${this.fromEmail}>`,
         to: [userEmail],
         subject: `🎂 Happy ${anniversaryData.years} Year${anniversaryData.years > 1 ? 's' : ''} with Zeituna!`,
@@ -551,7 +642,7 @@ class EmailService {
         return { success: false, error: 'Email service not configured' };
       }
 
-      const { data, error } = await this.resend.emails.send({
+      const { data, error } = await this.sendEmailQueued({
         from: `${this.fromName} <${this.fromEmail}>`,
         to: [userEmail],
         subject: '🔗 Wallet Connected Successfully!',
@@ -577,7 +668,7 @@ class EmailService {
         return { success: false, error: 'Email service not configured' };
       }
 
-      const { data, error } = await this.resend.emails.send({
+      const { data, error } = await this.sendEmailQueued({
         from: `${this.fromName} <${this.fromEmail}>`,
         to: [userEmail],
         subject: '✅ Email Verified - Welcome to Zeituna!',
