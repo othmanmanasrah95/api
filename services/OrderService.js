@@ -341,10 +341,28 @@ class OrderService extends BaseService {
           }
         }
       } else if (item.type === 'tree') {
-        // Tree adoption item
+        // Tree adoption item - could be a Tree ID or a LandPlot ID
         const cleanTreeId = String(item.id || '').replace(/^variant_/, '');
         let tree = null;
-        try { tree = await Tree.findById(cleanTreeId); } catch (_) { /* ignore malformed id */ }
+        let landPlot = null;
+        
+        // Try to find as Tree first
+        try { 
+          tree = await Tree.findById(cleanTreeId); 
+          if (tree) {
+            console.log(`🌲 Found tree: ${tree.name} (ID: ${tree._id})`);
+          }
+        } catch (_) { /* ignore malformed id */ }
+
+        // If not a tree, try to find as LandPlot
+        if (!tree) {
+          try {
+            landPlot = await LandPlot.findById(cleanTreeId);
+            if (landPlot) {
+              console.log(`🏞️ Found land plot: ${landPlot.name} (ID: ${landPlot._id})`);
+            }
+          } catch (_) { /* ignore malformed id */ }
+        }
 
         if (tree) {
           productData = {
@@ -353,8 +371,17 @@ class OrderService extends BaseService {
             price: tree.adoptionPrice,
             tutPrice: null
           };
+        } else if (landPlot) {
+          // This is a land plot adoption
+          productData = {
+            treeId: landPlot._id.toString(), // Store land plot ID as treeId
+            name: item.name || `Tree Adoption - ${landPlot.name}`,
+            price: item.price || landPlot.adoptionPrice,
+            tutPrice: null
+          };
+          console.log(`📝 Order item will use land plot ID: ${landPlot._id}`);
         } else {
-          // Fallback: allow creating an order even if the tree record isn't present
+          // Fallback: allow creating an order even if the tree/plot record isn't present
           // Use frontend-provided name/price so checkout doesn't hard-fail
           productData = {
             treeId: cleanTreeId || undefined,
@@ -362,6 +389,7 @@ class OrderService extends BaseService {
             price: item.price,
             tutPrice: null
           };
+          console.log(`⚠️ Tree/Plot not found, using ID as-is: ${cleanTreeId}`);
         }
       } else {
         throw new Error(`Invalid item type: ${item.type}`);
@@ -591,17 +619,29 @@ class OrderService extends BaseService {
       if (updated && status === constants.ORDER_STATUS.CONFIRMED) {
         try {
           // Refresh the order from database to ensure all fields are present
-          // Use findById with explicit selection to ensure all fields are included
-          const freshOrder = await Order.findById(orderId).lean();
+          // Don't use .lean() so we can access the user field properly
+          const freshOrder = await Order.findById(orderId);
           if (freshOrder) {
             console.log(`📧 Processing adoptions for order ${orderId}...`);
             console.log(`📋 Order items count: ${freshOrder.items?.length || 0}`);
+            console.log(`👤 Order user: ${freshOrder.user ? (freshOrder.user._id || freshOrder.user) : 'NONE'}`);
+            console.log(`📋 Order items:`, JSON.stringify(freshOrder.items.map(i => ({ 
+              type: i.type, 
+              treeId: i.treeId, 
+              name: i.name 
+            })), null, 2));
+            
+            // Convert to plain object for processing (but keep user reference)
+            const orderData = freshOrder.toObject();
+            if (freshOrder.user) {
+              orderData.user = freshOrder.user._id || freshOrder.user;
+            }
             
             // Process tree adoptions (record in database)
-            await this.processTreeAdoptions(freshOrder);
+            await this.processTreeAdoptions(orderData);
             
             // Send adoption certificates
-            await this.sendCertificatesIfNeeded(freshOrder);
+            await this.sendCertificatesIfNeeded(orderData);
           } else {
             console.error(`❌ Order ${orderId} not found when trying to process adoptions`);
           }
@@ -637,11 +677,17 @@ class OrderService extends BaseService {
 
         // Determine if this is a land plot adoption or individual tree adoption
         // Check if treeId is a valid land plot ID
+        console.log(`🔍 Checking if treeId ${treeId} is a land plot or tree...`);
         let landPlot = null;
         try {
           landPlot = await LandPlot.findById(treeId);
+          if (landPlot) {
+            console.log(`✅ Found land plot: ${landPlot.name} (ID: ${landPlot._id})`);
+            console.log(`   - Current adoptedTrees: ${landPlot.adoptedTrees}`);
+            console.log(`   - Total trees: ${landPlot.totalTrees}`);
+          }
         } catch (err) {
-          // Not a land plot, might be a tree ID
+          console.log(`   - Not a land plot (error: ${err.message})`);
         }
 
         if (landPlot) {
@@ -700,17 +746,30 @@ class OrderService extends BaseService {
           if (!landPlot.adoptions) {
             landPlot.adoptions = [];
           }
+          
+          const previousCount = landPlot.adoptedTrees || 0;
           landPlot.adoptions.push(adoption);
           landPlot.adoptedTrees = landPlot.adoptions.filter(a => a.status === 'Active').length;
+          
+          console.log(`📊 Adoption count update: ${previousCount} -> ${landPlot.adoptedTrees}`);
           
           // Update status if fully adopted
           if (landPlot.adoptedTrees >= landPlot.totalTrees) {
             landPlot.status = 'Fully Adopted';
+            console.log(`🏁 Land plot ${landPlot.name} is now fully adopted!`);
           }
 
           await landPlot.save();
+          
+          // Verify the save worked by reloading
+          const savedPlot = await LandPlot.findById(landPlot._id);
           console.log(`✅ Recorded adoption for land plot ${landPlot.name}: Tree #${treeNumber} adopted by user ${adopterUserId}`);
-          console.log(`   - Total adopted: ${landPlot.adoptedTrees}/${landPlot.totalTrees}`);
+          console.log(`   - Total adopted: ${savedPlot.adoptedTrees}/${savedPlot.totalTrees}`);
+          console.log(`   - Available trees: ${savedPlot.totalTrees - savedPlot.adoptedTrees}`);
+          
+          if (savedPlot.adoptedTrees !== landPlot.adoptedTrees) {
+            console.error(`⚠️ WARNING: Adoption count mismatch! Expected ${landPlot.adoptedTrees}, got ${savedPlot.adoptedTrees}`);
+          }
 
         } else {
           // This is an individual tree adoption
