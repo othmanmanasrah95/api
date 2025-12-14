@@ -52,18 +52,27 @@ exports.register = async (req, res) => {
     newUser.verificationCodeExpires = new Date(Date.now() + 10 * 60 * 1000);
     await newUser.save();
 
-    // Send verification email (async)
-    emailService.sendVerificationEmail(newUser.email, newUser.name, code)
-      .then(result => {
-        if (result.success) {
-          console.log('Verification email sent successfully to:', newUser.email);
+    // Send verification email and wait for result
+    try {
+      if (!emailService.isConfigured()) {
+        console.error('⚠️  Email service not configured - RESEND_API_KEY missing');
+        console.error('   Verification code for user:', newUser.email, 'is:', code);
+        console.error('   User can use resend-verification endpoint once email service is configured');
+      } else {
+        const emailResult = await emailService.sendVerificationEmail(newUser.email, newUser.name, code);
+        if (emailResult.success) {
+          console.log('✅ Verification email sent successfully to:', newUser.email);
         } else {
-          console.error('Failed to send verification email:', result.error);
+          console.error('❌ Failed to send verification email:', emailResult.error);
+          console.error('   Verification code for user:', newUser.email, 'is:', code);
+          console.error('   User can use resend-verification endpoint to request a new code');
         }
-      })
-      .catch(error => {
-        console.error('Error sending verification email:', error);
-      });
+      }
+    } catch (emailError) {
+      console.error('❌ Error sending verification email:', emailError);
+      console.error('   Verification code for user:', newUser.email, 'is:', code);
+      console.error('   User can use resend-verification endpoint to request a new code');
+    }
 
     res.status(201).json({
       success: true,
@@ -192,12 +201,16 @@ exports.verifyEmail = async (req, res) => {
 exports.resendVerification = async (req, res) => {
   try {
     const { email } = req.body;
+    
     if (!email) {
       return res.status(400).json({ success: false, error: 'Email is required' });
     }
 
+    console.log('📧 Resend verification request for email:', email);
+
     const user = await User.findOne({ email });
     if (!user) {
+      console.error('❌ User not found for email:', email);
       return res.status(404).json({ success: false, error: 'User not found' });
     }
 
@@ -205,18 +218,37 @@ exports.resendVerification = async (req, res) => {
       return res.status(200).json({ success: true, message: 'Email already verified' });
     }
 
+    // Generate new verification code
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     user.verificationCode = code;
     user.verificationCodeExpires = new Date(Date.now() + 10 * 60 * 1000);
     await user.save();
 
-    const result = await emailService.sendVerificationEmail(user.email, user.name || 'User', code);
-    if (!result.success) {
-      return res.status(500).json({ success: false, error: 'Failed to send verification email' });
+    console.log('✅ New verification code generated for user:', user.email);
+
+    // Check if email service is configured
+    if (!emailService.isConfigured()) {
+      console.error('❌ Email service not configured - RESEND_API_KEY missing');
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Email service is not configured. Please contact support.' 
+      });
     }
 
-    return res.status(200).json({ success: true, message: 'Verification code resent' });
+    // Send verification email
+    const result = await emailService.sendVerificationEmail(user.email, user.name || 'User', code);
+    if (!result.success) {
+      console.error('❌ Failed to send verification email:', result.error);
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Failed to send verification email. Please try again later or contact support.' 
+      });
+    }
+
+    console.log('✅ Verification email sent successfully to:', user.email);
+    return res.status(200).json({ success: true, message: 'Verification code resent successfully' });
   } catch (error) {
+    console.error('❌ Error in resendVerification:', error);
     return res.status(500).json({ success: false, error: 'Server error' });
   }
 };

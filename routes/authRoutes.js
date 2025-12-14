@@ -14,7 +14,7 @@ router.post('/login', authLimiter, validateLogin, login);
 
 // Email verification
 router.post('/verify-email', verifyEmail);
-router.post('/resend-verification', resendVerification);
+router.post('/resend-verification', authLimiter, resendVerification);
 
 // Profile routes
 router.get('/profile', protect, getProfile);
