@@ -933,7 +933,7 @@ class EmailService {
   }
 
   getAdoptionCertificateTemplate({ recipientName, adopterName, treeInfo, isGift }) {
-    const location = treeInfo?.location || 'Palestine';
+    const location = treeInfo?.location || 'Holy Land';
     const treeName = treeInfo?.name || 'Olive Tree';
     // Use hosted logo URL - update this with your actual Zeituna logo URL
     const logoUrl = process.env.CERTIFICATE_LOGO_URL || `${process.env.FRONTEND_URL || 'https://zeituna.com'}/treewihte1.png`;
@@ -952,7 +952,7 @@ class EmailService {
           
           body { 
             font-family: 'Playfair Display', Georgia, serif; 
-            background: linear-gradient(135deg, #0a1628 0%, #1e293b 50%, #0f172a 100%);
+            background: linear-gradient(135deg, #020617 0%, #0f172a 50%, #020617 100%);
             margin: 0;
             padding: 20px;
             min-height: 100vh;
@@ -1069,20 +1069,7 @@ class EmailService {
             margin: 25px auto;
             max-width: 600px;
             font-style: italic;
-          }
-          
-          .tree-icon-container {
-            margin: 40px 0;
-            padding: 30px;
-            position: relative;
-          }
-          
-          .tree-icon {
-            width: 180px;
-            height: auto;
-            margin: 0 auto;
-            filter: drop-shadow(0 8px 20px rgba(16, 185, 129, 0.5));
-            opacity: 0.95;
+            text-align: center;
           }
           
           .impact-text {
@@ -1096,6 +1083,7 @@ class EmailService {
             border-left: 4px solid #10b981;
             border-right: 4px solid #10b981;
             border-radius: 8px;
+            text-align: center;
           }
           
           .certificate-details {
@@ -1111,6 +1099,7 @@ class EmailService {
           .detail-item {
             flex: 1;
             padding: 0 15px;
+            text-align: center;
           }
           
           .detail-label {
@@ -1121,6 +1110,7 @@ class EmailService {
             font-weight: 600;
             margin-bottom: 10px;
             display: block;
+            text-align: center;
           }
           
           .detail-value {
@@ -1128,6 +1118,7 @@ class EmailService {
             color: #ffffff;
             font-weight: 600;
             text-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);
+            text-align: center;
           }
           
           .adopter-info {
@@ -1136,6 +1127,7 @@ class EmailService {
             margin-top: 20px;
             padding-top: 20px;
             border-top: 1px solid rgba(16, 185, 129, 0.2);
+            text-align: center;
           }
           
           .footer-seal {
@@ -1211,11 +1203,6 @@ class EmailService {
                 in recognition of ${isGift ? `<strong>${adopterName}'s</strong>` : 'your'} generous adoption of an olive tree in <strong>${location}</strong>
               </div>
               
-              <!-- Tree Icon -->
-              <div class="tree-icon-container">
-                <img class="tree-icon" alt="Olive Tree" src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0e/Tree_Silhouette_3.svg/240px-Tree_Silhouette_3.svg.png" />
-              </div>
-              
               <!-- Impact Statement -->
               <div class="impact-text">
                 Your adoption nurtures farmers, preserves heritage, and fuels a future of dignity and resilience. Together, we are growing a sustainable tomorrow rooted in the Holy Land.
@@ -1228,7 +1215,7 @@ class EmailService {
                   <div class="detail-value">${location}</div>
                 </div>
                 <div class="detail-item">
-                  <span class="detail-label">Tree Name</span>
+                  <span class="detail-label">Plot</span>
                   <div class="detail-value">${treeName}</div>
                 </div>
                 <div class="detail-item">
