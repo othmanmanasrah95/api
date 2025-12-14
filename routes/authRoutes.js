@@ -13,7 +13,7 @@ router.post('/register', authLimiter, validateRegistration, register);
 router.post('/login', authLimiter, validateLogin, login);
 
 // Email verification
-router.post('/verify-email', verifyEmail);
+router.post('/verify-email', authLimiter, verifyEmail);
 router.post('/resend-verification', authLimiter, resendVerification);
 
 // Profile routes

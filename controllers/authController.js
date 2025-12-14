@@ -21,8 +21,11 @@ exports.register = async (req, res) => {
 
     const { name, email, password, walletAddress } = req.body;
 
+    // Normalize email to lowercase and trim whitespace
+    const normalizedEmail = email ? email.toLowerCase().trim() : email;
+
     // Check if user exists
-    const userExists = await User.findOne({ email });
+    const userExists = await User.findOne({ email: normalizedEmail });
     if (userExists) {
       return res.status(400).json({
         success: false,
@@ -42,9 +45,13 @@ exports.register = async (req, res) => {
     }
 
     // Create new user and let pre-save hash password
-    const newUser = new User({ name, email, password,
+    const newUser = new User({ 
+      name, 
+      email: normalizedEmail, 
+      password,
       walletAddress: walletAddress || null,
-      walletConnected: !!walletAddress });
+      walletConnected: !!walletAddress 
+    });
 
     // Generate 6-digit verification code and expiry (10 minutes)
     const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -151,46 +158,77 @@ exports.login = async (req, res) => {
 exports.verifyEmail = async (req, res) => {
   try {
     const { email, code } = req.body;
+    
+    console.log('📧 Verify email request received:', { email, codeLength: code?.length });
+    
     if (!email || !code) {
       return res.status(400).json({ success: false, error: 'Email and code are required' });
     }
 
-    const user = await User.findOne({ email }).select('+verificationCode +verificationCodeExpires');
+    // Normalize email to lowercase for consistent lookup
+    const normalizedEmail = email.toLowerCase().trim();
+    console.log('🔍 Looking up user with email:', normalizedEmail);
+
+    // Find user with verification fields
+    const user = await User.findOne({ email: normalizedEmail }).select('+verificationCode +verificationCodeExpires');
+    
     if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
+      console.error('❌ User not found for email:', normalizedEmail);
+      // Check if user exists without verification fields (for debugging)
+      const userExists = await User.findOne({ email: normalizedEmail });
+      if (userExists) {
+        console.log('⚠️  User exists but verification fields not accessible');
+      }
+      return res.status(404).json({ success: false, error: 'User not found. Please make sure you used the correct email address.' });
     }
 
+    console.log('✅ User found:', user.email, 'isVerified:', user.isVerified);
+
     if (user.isVerified) {
+      console.log('ℹ️  User already verified');
       return res.status(200).json({ success: true, message: 'Email already verified' });
     }
 
     if (!user.verificationCode || !user.verificationCodeExpires) {
+      console.error('❌ No verification code found for user:', user.email);
       return res.status(400).json({ success: false, error: 'No verification code found. Please request a new code.' });
     }
 
+    console.log('🔐 Comparing codes - stored:', user.verificationCode, 'provided:', code);
+    
     if (user.verificationCode !== code) {
-      return res.status(400).json({ success: false, error: 'Invalid verification code' });
+      console.error('❌ Invalid verification code for user:', user.email);
+      return res.status(400).json({ success: false, error: 'Invalid verification code. Please check and try again.' });
     }
 
     if (user.verificationCodeExpires < new Date()) {
-      return res.status(400).json({ success: false, error: 'Verification code has expired' });
+      console.error('❌ Verification code expired for user:', user.email);
+      return res.status(400).json({ success: false, error: 'Verification code has expired. Please request a new code.' });
     }
 
+    // Verify the email
     user.isVerified = true;
     user.verificationCode = undefined;
     user.verificationCodeExpires = undefined;
     await user.save();
 
-    // Send welcome email and email verified confirmation
-    emailService.sendWelcomeEmail(user.email, user.name).catch(() => {});
+    console.log('✅ Email verified successfully for user:', user.email);
+
+    // Send welcome email and email verified confirmation (async, don't wait)
+    emailService.sendWelcomeEmail(user.email, user.name).catch((err) => {
+      console.error('Failed to send welcome email:', err);
+    });
     emailService.sendEmailVerifiedEmail({
       userEmail: user.email,
       userName: user.name
-    }).catch(() => {});
+    }).catch((err) => {
+      console.error('Failed to send email verified email:', err);
+    });
 
     const token = generateToken(user._id);
     return res.status(200).json({ success: true, message: 'Email verified successfully', data: { token } });
   } catch (error) {
+    console.error('❌ Error in verifyEmail:', error);
     return res.status(500).json({ success: false, error: 'Server error' });
   }
 };
