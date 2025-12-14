@@ -3,6 +3,7 @@ const Order = require('../models/order');
 const Product = require('../models/product');
 const ProductVariant = require('../models/productVariant');
 const Tree = require('../models/tree');
+const LandPlot = require('../models/landPlot');
 const User = require('../models/user');
 const TokenBalance = require('../models/tokenBalance');
 const TokenTransaction = require('../models/tokenTransaction');
@@ -586,22 +587,26 @@ class OrderService extends BaseService {
         console.error('Failed to send order status update email:', emailError);
       }
 
-      // When an order is confirmed, send adoption certificates if applicable
+      // When an order is confirmed, process tree adoptions and send certificates
       if (updated && status === constants.ORDER_STATUS.CONFIRMED) {
         try {
           // Refresh the order from database to ensure all fields are present
           // Use findById with explicit selection to ensure all fields are included
           const freshOrder = await Order.findById(orderId).lean();
           if (freshOrder) {
-            console.log(`📧 Sending certificates for order ${orderId}...`);
+            console.log(`📧 Processing adoptions for order ${orderId}...`);
             console.log(`📋 Order items count: ${freshOrder.items?.length || 0}`);
-            console.log(`📋 Full order data:`, JSON.stringify(freshOrder, null, 2));
+            
+            // Process tree adoptions (record in database)
+            await this.processTreeAdoptions(freshOrder);
+            
+            // Send adoption certificates
             await this.sendCertificatesIfNeeded(freshOrder);
           } else {
-            console.error(`❌ Order ${orderId} not found when trying to send certificates`);
+            console.error(`❌ Order ${orderId} not found when trying to process adoptions`);
           }
         } catch (e) {
-          console.error('❌ Failed to send adoption certificates:', e);
+          console.error('❌ Failed to process adoptions:', e);
           console.error('Error details:', e.stack);
         }
       }
@@ -609,6 +614,164 @@ class OrderService extends BaseService {
       return updated;
     } catch (error) {
       throw new Error(`Failed to update order status: ${error.message}`);
+    }
+  }
+
+  // Process tree adoptions when order is confirmed
+  async processTreeAdoptions(order) {
+    const treeItems = (order.items || []).filter(i => i.type === 'tree');
+    if (treeItems.length === 0) {
+      console.log('📋 No tree items found in order, skipping adoption processing');
+      return;
+    }
+
+    console.log(`🌳 Processing ${treeItems.length} tree adoption(s) for order ${order._id}`);
+
+    for (const item of treeItems) {
+      try {
+        const treeId = item.treeId;
+        if (!treeId) {
+          console.warn(`⚠️ Tree item ${item.name} has no treeId, skipping`);
+          continue;
+        }
+
+        // Determine if this is a land plot adoption or individual tree adoption
+        // Check if treeId is a valid land plot ID
+        let landPlot = null;
+        try {
+          landPlot = await LandPlot.findById(treeId);
+        } catch (err) {
+          // Not a land plot, might be a tree ID
+        }
+
+        if (landPlot) {
+          // This is a land plot adoption
+          console.log(`🏞️ Processing land plot adoption for plot: ${landPlot.name}`);
+          
+          // Check if plot has available trees
+          if (landPlot.adoptedTrees >= landPlot.totalTrees) {
+            console.warn(`⚠️ Land plot ${landPlot.name} is fully adopted, skipping`);
+            continue;
+          }
+
+          // Determine the adopter user ID
+          // For gifts, we still record the adoption under the buyer's account
+          // but the certificate goes to the recipient
+          // When using .lean(), user is already a string/ObjectId
+          let adopterUserId = null;
+          if (order.user) {
+            adopterUserId = typeof order.user === 'object' && order.user._id 
+              ? order.user._id.toString() 
+              : order.user.toString();
+          }
+          
+          if (!adopterUserId) {
+            console.warn(`⚠️ Order has no user ID, cannot record adoption for guest order`);
+            // For guest orders, we might want to create a user or handle differently
+            // For now, we'll skip recording the adoption
+            continue;
+          }
+          
+          console.log(`👤 Processing adoption for user: ${adopterUserId}`);
+
+          // Find next available tree number
+          const adoptedTreeNumbers = (landPlot.adoptions || [])
+            .filter(adoption => adoption.status === 'Active')
+            .map(adoption => adoption.treeNumber);
+          
+          let treeNumber = 1;
+          while (adoptedTreeNumbers.includes(treeNumber)) {
+            treeNumber++;
+          }
+
+          // Calculate expiration date (1 year from now)
+          const expiresAt = new Date();
+          expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+
+          // Add adoption to land plot
+          const adoption = {
+            user: adopterUserId,
+            treeNumber: treeNumber,
+            expiresAt: expiresAt,
+            status: 'Active',
+            adoptedAt: new Date()
+          };
+
+          if (!landPlot.adoptions) {
+            landPlot.adoptions = [];
+          }
+          landPlot.adoptions.push(adoption);
+          landPlot.adoptedTrees = landPlot.adoptions.filter(a => a.status === 'Active').length;
+          
+          // Update status if fully adopted
+          if (landPlot.adoptedTrees >= landPlot.totalTrees) {
+            landPlot.status = 'Fully Adopted';
+          }
+
+          await landPlot.save();
+          console.log(`✅ Recorded adoption for land plot ${landPlot.name}: Tree #${treeNumber} adopted by user ${adopterUserId}`);
+          console.log(`   - Total adopted: ${landPlot.adoptedTrees}/${landPlot.totalTrees}`);
+
+        } else {
+          // This is an individual tree adoption
+          console.log(`🌲 Processing individual tree adoption for tree: ${treeId}`);
+          
+          let tree = null;
+          try {
+            tree = await Tree.findById(treeId);
+          } catch (err) {
+            console.warn(`⚠️ Could not find tree with ID ${treeId}:`, err.message);
+          }
+
+          if (tree) {
+            // When using .lean(), user is already a string/ObjectId
+            let adopterUserId = null;
+            if (order.user) {
+              adopterUserId = typeof order.user === 'object' && order.user._id 
+                ? order.user._id.toString() 
+                : order.user.toString();
+            }
+            
+            if (!adopterUserId) {
+              console.warn(`⚠️ Order has no user ID, cannot record tree adoption for guest order`);
+              continue;
+            }
+            
+            console.log(`👤 Processing tree adoption for user: ${adopterUserId}`);
+
+            // Check if tree is available for adoption
+            if (tree.status === 'Fully Adopted') {
+              console.warn(`⚠️ Tree ${tree.name} is fully adopted, skipping`);
+              continue;
+            }
+
+            // Check if user already adopted this tree
+            if (tree.adopters && tree.adopters.includes(adopterUserId)) {
+              console.warn(`⚠️ User ${adopterUserId} already adopted tree ${tree.name}, skipping`);
+              continue;
+            }
+
+            // Add user to adopters
+            if (!tree.adopters) {
+              tree.adopters = [];
+            }
+            tree.adopters.push(adopterUserId);
+            await tree.save();
+            console.log(`✅ Recorded adoption for tree ${tree.name} by user ${adopterUserId}`);
+
+            // Update user's adopted trees
+            await User.findByIdAndUpdate(adopterUserId, {
+              $addToSet: { adoptedTrees: tree._id } // Use $addToSet to avoid duplicates
+            });
+            console.log(`✅ Updated user ${adopterUserId} adopted trees list`);
+          } else {
+            console.warn(`⚠️ Tree ${treeId} not found, skipping adoption recording`);
+          }
+        }
+      } catch (itemError) {
+        console.error(`❌ Error processing tree adoption for item ${item.name}:`, itemError);
+        // Continue with next item
+      }
     }
   }
 
