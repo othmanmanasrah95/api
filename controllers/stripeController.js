@@ -232,19 +232,33 @@ class StripeController {
         order.payment.transactionId = paymentIntentId;
         await order.save();
         
-        // Update order status through service to trigger certificate emails and confirmation email
+        // Update order status through service to trigger certificate emails
         await orderService.updateOrderStatus(order._id, 'confirmed');
         
-        // Send payment confirmation email
+        // Send order confirmation email after payment is confirmed
         try {
+          // Refresh order to get latest data after status update
+          const Order = require('../models/order');
+          const refreshedOrder = await Order.findById(order._id);
+          
+          if (!refreshedOrder) {
+            console.error('Order not found after status update');
+            return res.json({
+              success: true,
+              message: 'Payment confirmed successfully',
+              orderId: order._id,
+              paymentStatus: 'completed'
+            });
+          }
+          
           // For guest orders, use customer email from order
           // For logged-in users, try to get user details but fallback to order customer email
-          let userEmail = order.customer?.email;
-          let userName = order.customer?.firstName || 'Customer';
+          let userEmail = refreshedOrder.customer?.email;
+          let userName = `${refreshedOrder.customer?.firstName || ''} ${refreshedOrder.customer?.lastName || ''}`.trim() || 'Customer';
           
-          if (order.user) {
+          if (refreshedOrder.user) {
             const User = require('../models/user');
-            const user = await User.findById(order.user);
+            const user = await User.findById(refreshedOrder.user);
             if (user && user.email) {
               userEmail = user.email;
               userName = user.name || userName;
@@ -252,17 +266,22 @@ class StripeController {
           }
           
           if (userEmail) {
-            await emailService.sendPaymentSuccessEmail({
+            await emailService.sendOrderConfirmationEmail({
               userEmail: userEmail,
               userName: userName,
               orderData: {
-                orderNumber: order.orderNumber || order._id.toString(),
-                totals: order.totals
+                orderNumber: refreshedOrder.orderNumber || refreshedOrder._id.toString(),
+                items: refreshedOrder.items,
+                totals: refreshedOrder.totals,
+                shipping: refreshedOrder.shipping,
+                payment: refreshedOrder.payment,
+                status: refreshedOrder.status,
+                customer: refreshedOrder.customer
               }
             });
           }
         } catch (emailError) {
-          console.error('Failed to send payment confirmation email:', emailError);
+          console.error('Failed to send order confirmation email:', emailError);
           // Don't fail the payment confirmation if email fails
         }
 

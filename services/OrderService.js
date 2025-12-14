@@ -186,70 +186,8 @@ class OrderService extends BaseService {
         await this.deductTutFromWallet(userId, tutTotal, order._id);
       }
 
-      // Send order confirmation email to the buyer (person who placed the order)
-      // This should always be sent to order.customer.email, regardless of login status
-      try {
-        const buyerEmail = order.customer?.email;
-        const buyerName = `${order.customer?.firstName || ''} ${order.customer?.lastName || ''}`.trim() || 'Customer';
-        
-        if (buyerEmail) {
-          // Always send order confirmation to the buyer
-          await emailService.sendOrderConfirmationEmail({
-            userEmail: buyerEmail,
-            userName: buyerName,
-            orderData: {
-              orderNumber: order.orderNumber || order._id.toString(),
-              items: order.items,
-              totals: order.totals,
-              shipping: order.shipping,
-              payment: order.payment,
-              status: order.status,
-              customer: order.customer
-            }
-          });
-
-          // For logged-in users, also check for milestones
-          if (userId) {
-            const user = await User.findById(userId);
-            if (user && user.email) {
-              // Check if this is user's first order
-              const userOrderCount = await this.model.countDocuments({ user: userId });
-              if (userOrderCount === 1) {
-                try {
-                  await emailService.sendFirstOrderEmail({
-                    userEmail: user.email,
-                    userName: user.name,
-                    orderData: {
-                      orderNumber: order.orderNumber || order._id.toString()
-                    }
-                  });
-                } catch (e) {
-                  console.error('Failed to send first order email:', e);
-                }
-              }
-
-              // Check for order milestones (10, 25, 50, 100)
-              const milestones = [10, 25, 50, 100];
-              if (milestones.includes(userOrderCount)) {
-                try {
-                  await emailService.sendOrderMilestoneEmail({
-                    userEmail: user.email,
-                    userName: user.name,
-                    milestoneData: {
-                      orderCount: userOrderCount
-                    }
-                  });
-                } catch (e) {
-                  console.error('Failed to send order milestone email:', e);
-                }
-              }
-            }
-          }
-        }
-      } catch (emailError) {
-        console.error('Failed to send order confirmation email:', emailError);
-        // Don't fail the order creation if email fails
-      }
+      // Order confirmation and milestone emails will be sent after payment is confirmed
+      // Do not send emails here - wait for payment confirmation
 
       return order;
     } catch (error) {
@@ -553,33 +491,21 @@ class OrderService extends BaseService {
       try {
         await updated.populate('user');
         if (updated.user && updated.user.email) {
-          // Send status update email
-          await emailService.sendOrderStatusUpdateEmail({
-            userEmail: updated.user.email,
-            userName: updated.user.name,
-            orderData: {
-              orderNumber: updated.orderNumber || updated._id.toString(),
-              status: updated.status,
-              trackingNumber: updated.trackingNumber,
-              items: updated.items,
-              totals: updated.totals
-            }
-          });
-
-          // Send specific milestone emails for important status changes
-          if (status === constants.ORDER_STATUS.CONFIRMED && updated.payment?.status === 'completed') {
-            try {
-              await emailService.sendPaymentSuccessEmail({
-                userEmail: updated.user.email,
-                userName: updated.user.name,
-                orderData: {
-                  orderNumber: updated.orderNumber || updated._id.toString(),
-                  totals: updated.totals
-                }
-              });
-            } catch (e) {
-              console.error('Failed to send payment success email:', e);
-            }
+          // Skip status update email for 'confirmed' status - order confirmation email is sent separately
+          // Order confirmation email is sent after payment confirmation, not here
+          if (status !== constants.ORDER_STATUS.CONFIRMED) {
+            // Send status update email for other status changes (shipped, delivered, etc.)
+            await emailService.sendOrderStatusUpdateEmail({
+              userEmail: updated.user.email,
+              userName: updated.user.name,
+              orderData: {
+                orderNumber: updated.orderNumber || updated._id.toString(),
+                status: updated.status,
+                trackingNumber: updated.trackingNumber,
+                items: updated.items,
+                totals: updated.totals
+              }
+            });
           }
 
           if (status === 'shipped') {
