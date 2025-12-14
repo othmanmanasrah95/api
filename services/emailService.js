@@ -844,35 +844,314 @@ class EmailService {
   getAdoptionCertificateTemplate({ recipientName, adopterName, treeInfo, isGift }) {
     const location = treeInfo?.location || 'Palestine';
     const treeName = treeInfo?.name || 'Olive Tree';
+    // Use hosted logo URL - update this with your actual Zeituna logo URL
+    const logoUrl = process.env.CERTIFICATE_LOGO_URL || `${process.env.FRONTEND_URL || 'https://zeituna.com'}/treewihte1.png`;
+    
     return `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Adoption Certificate</title>
+        <title>Tree Adoption Certificate - Zeituna</title>
         <style>
-          body { font-family: Georgia, 'Times New Roman', serif; background:#0f172a; margin:0; padding:0; }
-          .wrap { max-width: 820px; margin: 0 auto; background: radial-gradient(1000px 500px at 50% -200px, rgba(255,255,255,0.06), rgba(255,255,255,0.0)), #0f172a; color: #e5e7eb; padding: 40px 24px; }
-          .card { background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 40px 32px; text-align: center; }
-          .title { letter-spacing: .25em; text-transform: uppercase; color:#d1fae5; font-weight: 600; }
-          .name { font-family: 'Brush Script MT', cursive; font-size: 42px; color:#f3f4f6; margin: 20px 0; }
-          .muted { color:#cbd5e1; }
-          .cols { display:flex; justify-content: space-between; margin-top: 24px; color:#d1fae5; font-weight:600; }
-          .tree { margin: 28px auto 0; width: 120px; opacity:.9; }
+          @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Dancing+Script:wght@400;600;700&display=swap');
+          
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          
+          body { 
+            font-family: 'Playfair Display', Georgia, serif; 
+            background: linear-gradient(135deg, #0a1628 0%, #1e293b 50%, #0f172a 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          
+          .certificate-container {
+            max-width: 900px;
+            width: 100%;
+            margin: 0 auto;
+            position: relative;
+          }
+          
+          .certificate-border {
+            background: linear-gradient(145deg, rgba(255,255,255,0.15), rgba(255,255,255,0.05));
+            border: 4px solid;
+            border-image: linear-gradient(45deg, #10b981, #059669, #10b981, #34d399) 1;
+            border-radius: 20px;
+            padding: 60px 50px;
+            box-shadow: 
+              0 20px 60px rgba(0, 0, 0, 0.5),
+              inset 0 0 100px rgba(16, 185, 129, 0.1),
+              0 0 40px rgba(16, 185, 129, 0.2);
+            position: relative;
+            overflow: hidden;
+          }
+          
+          .certificate-border::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(16, 185, 129, 0.1) 0%, transparent 70%);
+            animation: rotate 20s linear infinite;
+          }
+          
+          @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+          
+          .certificate-content {
+            position: relative;
+            z-index: 1;
+            text-align: center;
+            color: #f8fafc;
+          }
+          
+          .logo-container {
+            margin-bottom: 30px;
+            padding-bottom: 25px;
+            border-bottom: 3px solid;
+            border-image: linear-gradient(90deg, transparent, #10b981, transparent) 1;
+          }
+          
+          .logo {
+            max-width: 120px;
+            height: auto;
+            margin: 0 auto 15px;
+            filter: drop-shadow(0 4px 8px rgba(16, 185, 129, 0.4));
+          }
+          
+          .company-name {
+            font-size: 32px;
+            font-weight: 700;
+            color: #10b981;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            margin-bottom: 5px;
+            text-shadow: 0 2px 10px rgba(16, 185, 129, 0.5);
+          }
+          
+          .certificate-title {
+            font-size: 18px;
+            letter-spacing: 8px;
+            text-transform: uppercase;
+            color: #34d399;
+            font-weight: 600;
+            margin: 40px 0 20px;
+            padding: 15px 0;
+            border-top: 2px solid rgba(16, 185, 129, 0.3);
+            border-bottom: 2px solid rgba(16, 185, 129, 0.3);
+          }
+          
+          .presented-text {
+            font-size: 16px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: #cbd5e1;
+            margin: 30px 0 15px;
+            font-weight: 400;
+          }
+          
+          .recipient-name {
+            font-family: 'Dancing Script', 'Brush Script MT', cursive;
+            font-size: 56px;
+            font-weight: 700;
+            color: #ffffff;
+            margin: 20px 0 30px;
+            text-shadow: 
+              0 2px 20px rgba(16, 185, 129, 0.6),
+              0 4px 10px rgba(0, 0, 0, 0.5);
+            line-height: 1.2;
+          }
+          
+          .recognition-text {
+            font-size: 18px;
+            line-height: 1.8;
+            color: #e2e8f0;
+            margin: 25px auto;
+            max-width: 600px;
+            font-style: italic;
+          }
+          
+          .tree-icon-container {
+            margin: 40px 0;
+            padding: 30px;
+            position: relative;
+          }
+          
+          .tree-icon {
+            width: 180px;
+            height: auto;
+            margin: 0 auto;
+            filter: drop-shadow(0 8px 20px rgba(16, 185, 129, 0.5));
+            opacity: 0.95;
+          }
+          
+          .impact-text {
+            font-size: 16px;
+            line-height: 1.8;
+            color: #cbd5e1;
+            margin: 30px auto;
+            max-width: 650px;
+            padding: 25px;
+            background: rgba(16, 185, 129, 0.08);
+            border-left: 4px solid #10b981;
+            border-right: 4px solid #10b981;
+            border-radius: 8px;
+          }
+          
+          .certificate-details {
+            display: flex;
+            justify-content: space-around;
+            margin: 40px 0 30px;
+            padding: 30px 20px;
+            background: rgba(16, 185, 129, 0.05);
+            border-radius: 12px;
+            border: 1px solid rgba(16, 185, 129, 0.2);
+          }
+          
+          .detail-item {
+            flex: 1;
+            padding: 0 15px;
+          }
+          
+          .detail-label {
+            font-size: 14px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: #34d399;
+            font-weight: 600;
+            margin-bottom: 10px;
+            display: block;
+          }
+          
+          .detail-value {
+            font-size: 20px;
+            color: #ffffff;
+            font-weight: 600;
+            text-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);
+          }
+          
+          .adopter-info {
+            font-size: 14px;
+            color: #94a3b8;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(16, 185, 129, 0.2);
+          }
+          
+          .footer-seal {
+            margin-top: 35px;
+            padding-top: 25px;
+            border-top: 2px solid rgba(16, 185, 129, 0.3);
+          }
+          
+          .seal-text {
+            font-size: 12px;
+            letter-spacing: 2px;
+            color: #64748b;
+            text-transform: uppercase;
+            margin-top: 15px;
+          }
+          
+          .decorative-corner {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            border: 3px solid #10b981;
+            opacity: 0.3;
+          }
+          
+          .corner-tl { top: 20px; left: 20px; border-right: none; border-bottom: none; border-radius: 20px 0 0 0; }
+          .corner-tr { top: 20px; right: 20px; border-left: none; border-bottom: none; border-radius: 0 20px 0 0; }
+          .corner-bl { bottom: 20px; left: 20px; border-right: none; border-top: none; border-radius: 0 0 0 20px; }
+          .corner-br { bottom: 20px; right: 20px; border-left: none; border-top: none; border-radius: 0 0 20px 0; }
+          
+          @media only screen and (max-width: 600px) {
+            .certificate-border {
+              padding: 40px 25px;
+            }
+            .recipient-name {
+              font-size: 42px;
+            }
+            .certificate-details {
+              flex-direction: column;
+              gap: 20px;
+            }
+            .detail-item {
+              padding: 10px 0;
+            }
+          }
         </style>
       </head>
       <body>
-        <div class="wrap">
-          <div class="card">
-            <div class="title">This certificate is presented to</div>
-            <div class="name">${recipientName}</div>
-            <p class="muted">in recognition of ${isGift ? `${adopterName}'s` : 'your'} olive tree adoption in ${location}.</p>
-            <p class="muted">Your adoption nurtures farmers, preserves heritage, and fuels a future of dignity and resilience.</p>
-            <img class="tree" alt="tree" src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0e/Tree_Silhouette_3.svg/240px-Tree_Silhouette_3.svg.png" />
-            <div class="cols">
-              <div>Location<br/><span class="muted">${location}</span></div>
-              <div>Tree<br/><span class="muted">${treeName}</span></div>
+        <div class="certificate-container">
+          <div class="certificate-border">
+            <div class="decorative-corner corner-tl"></div>
+            <div class="decorative-corner corner-tr"></div>
+            <div class="decorative-corner corner-bl"></div>
+            <div class="decorative-corner corner-br"></div>
+            
+            <div class="certificate-content">
+              <!-- Logo Section -->
+              <div class="logo-container">
+                <img src="${logoUrl}" alt="Zeituna Logo" class="logo" />
+                <div class="company-name">Zeituna</div>
+              </div>
+              
+              <!-- Certificate Title -->
+              <div class="certificate-title">Certificate of Tree Adoption</div>
+              
+              <!-- Presented To -->
+              <div class="presented-text">This Certificate is Presented To</div>
+              
+              <!-- Recipient Name -->
+              <div class="recipient-name">${recipientName}</div>
+              
+              <!-- Recognition Text -->
+              <div class="recognition-text">
+                in recognition of ${isGift ? `<strong>${adopterName}'s</strong>` : 'your'} generous adoption of an olive tree in <strong>${location}</strong>
+              </div>
+              
+              <!-- Tree Icon -->
+              <div class="tree-icon-container">
+                <img class="tree-icon" alt="Olive Tree" src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0e/Tree_Silhouette_3.svg/240px-Tree_Silhouette_3.svg.png" />
+              </div>
+              
+              <!-- Impact Statement -->
+              <div class="impact-text">
+                Your adoption nurtures farmers, preserves heritage, and fuels a future of dignity and resilience. Together, we are growing a sustainable tomorrow rooted in the Holy Land.
+              </div>
+              
+              <!-- Certificate Details -->
+              <div class="certificate-details">
+                <div class="detail-item">
+                  <span class="detail-label">Location</span>
+                  <div class="detail-value">${location}</div>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Tree Name</span>
+                  <div class="detail-value">${treeName}</div>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Date</span>
+                  <div class="detail-value">${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+                </div>
+              </div>
+              
+              ${isGift ? `<div class="adopter-info">Adopted by: <strong>${adopterName}</strong></div>` : ''}
+              
+              <!-- Footer Seal -->
+              <div class="footer-seal">
+                <div class="seal-text">Official Digital Certificate • Verified by Zeituna Platform</div>
+              </div>
             </div>
           </div>
         </div>
