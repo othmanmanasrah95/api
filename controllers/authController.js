@@ -3,6 +3,7 @@ const TokenBalance = require('../models/tokenBalance');
 const Tree = require('../models/tree');
 const Transaction = require('../models/transaction');
 const { generateToken } = require('../utils/tokenUtils');
+const { normalizeEmail } = require('../utils/emailUtils');
 const emailService = require('../services/emailService');
 const mongoose = require('mongoose');
 
@@ -21,8 +22,10 @@ exports.register = async (req, res) => {
 
     const { name, email, password, walletAddress } = req.body;
 
-    // Normalize email to lowercase and trim whitespace
-    const normalizedEmail = email ? email.toLowerCase().trim() : email;
+    // Normalize email (handles Gmail dots, case, etc.)
+    const normalizedEmail = normalizeEmail(email);
+
+    console.log('📧 Registration - Original email:', email, 'Normalized:', normalizedEmail);
 
     // Check if user exists
     const userExists = await User.findOne({ email: normalizedEmail });
@@ -102,8 +105,11 @@ exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    // Normalize email (handles Gmail dots, case, etc.)
+    const normalizedEmail = normalizeEmail(email);
+
     // Check for user
-    const user = await User.findOne({ email }).select('+password');
+    const user = await User.findOne({ email: normalizedEmail }).select('+password');
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -165,17 +171,35 @@ exports.verifyEmail = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Email and code are required' });
     }
 
-    // Normalize email to lowercase for consistent lookup
-    const normalizedEmail = email.toLowerCase().trim();
-    console.log('🔍 Looking up user with email:', normalizedEmail);
+    // Normalize email (handles Gmail dots, case, etc.)
+    const normalizedEmail = normalizeEmail(email);
+    console.log('🔍 Original email:', email, 'Normalized:', normalizedEmail);
 
-    // Find user with verification fields
-    const user = await User.findOne({ email: normalizedEmail }).select('+verificationCode +verificationCodeExpires');
+    // Find user with verification fields - try normalized email first
+    let user = await User.findOne({ email: normalizedEmail }).select('+verificationCode +verificationCodeExpires');
+    
+    // If not found with normalized email, try original email (for existing users registered before normalization)
+    if (!user && email.toLowerCase().trim() !== normalizedEmail) {
+      console.log('🔍 Trying original email format:', email.toLowerCase().trim());
+      user = await User.findOne({ email: email.toLowerCase().trim() }).select('+verificationCode +verificationCodeExpires');
+      
+      // If found with original format, update to normalized format for consistency
+      if (user) {
+        console.log('✅ Found user with original email format, updating to normalized format');
+        user.email = normalizedEmail;
+        await user.save();
+      }
+    }
     
     if (!user) {
       console.error('❌ User not found for email:', normalizedEmail);
       // Check if user exists without verification fields (for debugging)
-      const userExists = await User.findOne({ email: normalizedEmail });
+      const userExists = await User.findOne({ 
+        $or: [
+          { email: normalizedEmail },
+          { email: email.toLowerCase().trim() }
+        ]
+      });
       if (userExists) {
         console.log('⚠️  User exists but verification fields not accessible');
       }
@@ -244,11 +268,28 @@ exports.resendVerification = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Email is required' });
     }
 
-    console.log('📧 Resend verification request for email:', email);
+    // Normalize email (handles Gmail dots, case, etc.)
+    const normalizedEmail = normalizeEmail(email);
+    console.log('📧 Resend verification - Original email:', email, 'Normalized:', normalizedEmail);
 
-    const user = await User.findOne({ email });
+    // Try normalized email first
+    let user = await User.findOne({ email: normalizedEmail });
+    
+    // If not found, try original email (for existing users)
+    if (!user && email.toLowerCase().trim() !== normalizedEmail) {
+      console.log('🔍 Trying original email format:', email.toLowerCase().trim());
+      user = await User.findOne({ email: email.toLowerCase().trim() });
+      
+      // If found with original format, update to normalized format for consistency
+      if (user) {
+        console.log('✅ Found user with original email format, updating to normalized format');
+        user.email = normalizedEmail;
+        await user.save();
+      }
+    }
+    
     if (!user) {
-      console.error('❌ User not found for email:', email);
+      console.error('❌ User not found for email:', normalizedEmail);
       return res.status(404).json({ success: false, error: 'User not found' });
     }
 
