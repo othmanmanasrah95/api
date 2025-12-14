@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
+const path = require('path');
 const { isDbConnected, getDbStatus } = require('./config/db');
 const User = require('./models/user');
 const { corsOptions, securityHeaders, apiLimiter } = require('./middleware/security');
@@ -59,8 +60,23 @@ app.use((req, res, next) => {
 // Apply rate limiting to all routes
 app.use(apiLimiter);
 
-// Root route
-app.get('/', (req, res) => {
+// Serve static files from the React app (before API routes)
+const clientDistPath = path.join(__dirname, '..', 'Client', 'dist');
+app.use(express.static(clientDistPath, {
+  setHeaders: (res, filePath) => {
+    // Set correct MIME types for JavaScript modules
+    if (filePath.endsWith('.js')) {
+      res.setHeader('Content-Type', 'application/javascript');
+    } else if (filePath.endsWith('.mjs')) {
+      res.setHeader('Content-Type', 'application/javascript');
+    } else if (filePath.endsWith('.css')) {
+      res.setHeader('Content-Type', 'text/css');
+    }
+  }
+}));
+
+// API info endpoint (before static files)
+app.get('/api', (req, res) => {
   res.json({
     success: true,
     message: 'Zeituna API Server',
@@ -184,13 +200,7 @@ app.use('/api/email', emailRoutes);
 app.use('/api/stripe', stripeRoutes);
 app.use('/api/contact', require('./routes/contactRoutes'));
 
-// 404 handler
-app.use(notFound);
-
-// Error Handler Middleware
-app.use(errorHandler);
-
-// TEMP: Route to check if users exist
+// TEMP: Route to check if users exist (before catch-all)
 app.get('/check-users', async (req, res) => {
   try {
     const users = await User.find();
@@ -200,8 +210,22 @@ app.get('/check-users', async (req, res) => {
   }
 });
 
-// Health check endpoint for uptime monitoring and frontend checks
-// (duplicate removed)
+// Catch-all handler: serve React app for any non-API routes
+// This must be after all API routes
+app.get('*', (req, res, next) => {
+  // Skip if it's an API route
+  if (req.path.startsWith('/api')) {
+    return next();
+  }
+  // Serve index.html for all other routes (SPA routing)
+  res.sendFile(path.join(clientDistPath, 'index.html'));
+});
+
+// 404 handler for API routes only
+app.use(notFound);
+
+// Error Handler Middleware
+app.use(errorHandler);
 
 
 module.exports = app;
