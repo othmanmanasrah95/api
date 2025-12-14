@@ -566,8 +566,9 @@ class OrderService extends BaseService {
             // Process tree adoptions (record in database)
             await this.processTreeAdoptions(orderData);
             
-            // Send adoption certificates
-            await this.sendCertificatesIfNeeded(orderData);
+            // Send adoption certificates (pass the Mongoose document so it can use .populate())
+            // The method will populate the user field if needed
+            await this.sendCertificatesIfNeeded(freshOrder);
           } else {
             console.error(`❌ Order ${orderId} not found when trying to process adoptions`);
           }

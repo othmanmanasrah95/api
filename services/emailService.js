@@ -969,13 +969,13 @@ class EmailService {
           }
           
           .certificate-border {
-            background: linear-gradient(145deg, rgba(255,255,255,0.15), rgba(255,255,255,0.05));
+            background: linear-gradient(145deg, rgba(15, 23, 42, 0.95), rgba(2, 6, 23, 0.98));
             border: 4px solid;
             border-image: linear-gradient(45deg, #10b981, #059669, #10b981, #34d399) 1;
             border-radius: 20px;
             padding: 60px 50px;
             box-shadow: 
-              0 20px 60px rgba(0, 0, 0, 0.5),
+              0 20px 60px rgba(0, 0, 0, 0.8),
               inset 0 0 100px rgba(16, 185, 129, 0.1),
               0 0 40px rgba(16, 185, 129, 0.2);
             position: relative;
