@@ -34,10 +34,7 @@ router.post('/cancel-payment', auth, stripeController.cancelPayment);
 router.post('/create-refund', auth, stripeController.createRefund);
 router.get('/payment-status/:paymentIntentId', auth, stripeController.getPaymentStatus);
 
-// Webhook endpoint (no auth required)
-router.post('/webhook', 
-  express.raw({ type: 'application/json' }),
-  stripeController.handleWebhook
-);
+// Webhook endpoint is registered in app.js BEFORE JSON parser
+// to ensure raw body is available for signature verification
 
 module.exports = router;

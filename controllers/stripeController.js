@@ -429,7 +429,18 @@ class StripeController {
   async handleWebhook(req, res) {
     try {
       const signature = req.headers['stripe-signature'];
+      
+      // Payload must be a Buffer for Stripe signature verification
+      // This is ensured by registering the webhook route BEFORE express.json() in app.js
       const payload = req.body;
+      
+      if (!Buffer.isBuffer(payload)) {
+        console.error('Webhook payload is not a Buffer. Body type:', typeof payload, 'Is object:', typeof payload === 'object');
+        return res.status(400).json({
+          success: false,
+          message: 'Webhook payload must be raw body. Check middleware order in app.js - webhook route must be registered BEFORE express.json()'
+        });
+      }
 
       // Verify webhook signature
       const verification = stripeService.verifyWebhookSignature(payload, signature);

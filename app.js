@@ -20,6 +20,7 @@ const adminRoutes = require('./routes/adminRoutes');
 const discountRoutes = require('./routes/discountRoutes');
 const emailRoutes = require('./routes/emailRoutes');
 const stripeRoutes = require('./routes/stripeRoutes');
+const stripeController = require('./controllers/stripeController');
 
 // Initialize express app
 const app = express();
@@ -32,6 +33,27 @@ app.set('trust proxy', 1);
 // Global Middleware
 app.use(securityHeaders);
 app.use(cors(corsOptions));
+
+// IMPORTANT: Stripe webhook must be registered BEFORE JSON parser
+// Stripe webhook needs raw body for signature verification
+app.post('/api/stripe/webhook', 
+  express.raw({ type: 'application/json' }), 
+  async (req, res) => {
+    try {
+      await stripeController.handleWebhook(req, res);
+    } catch (error) {
+      console.error('Webhook route error:', error);
+      if (!res.headersSent) {
+        res.status(500).json({
+          success: false,
+          message: 'Webhook processing error',
+          error: error.message
+        });
+      }
+    }
+  }
+);
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
