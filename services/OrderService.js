@@ -790,7 +790,7 @@ class OrderService extends BaseService {
         name: tree.name,
         location: tree.location,
         species: tree.species
-      } : { name: item.name?.replace('Tree Adoption - ', ''), location: 'Palestine', species: 'Olive' };
+      } : { name: item.name?.replace('Tree Adoption - ', ''), location: 'Holy Land', species: 'Olive' };
 
       const adopterName = `${order.customer?.firstName || ''} ${order.customer?.lastName || ''}`.trim() || 'Customer';
 

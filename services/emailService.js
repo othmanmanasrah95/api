@@ -1186,26 +1186,35 @@ class EmailService {
               <!-- Logo Section -->
               <div class="logo-container">
                 <img src="${logoUrl}" alt="Zeituna Logo" class="logo" />
-                <div class="company-name">Zeituna</div>
               </div>
               
-              <!-- Certificate Title -->
-              <div class="certificate-title">Certificate of Tree Adoption</div>
+              <!-- Certificate Type Title -->
+              <div class="certificate-title">${isGift ? 'Gift Adoption Certificate' : 'Self-Adoption Certificate'}</div>
+              
+              <!-- Company Name (ZEITUNA) -->
+              <div class="company-name" style="margin-top: 20px; margin-bottom: 20px;">ZEITUNA</div>
+              
+              <!-- Certificate Subtitle -->
+              <div class="certificate-title" style="margin-top: 20px; margin-bottom: 30px;">Certificate of Olive Tree Adoption</div>
               
               <!-- Presented To -->
-              <div class="presented-text">This Certificate is Presented To</div>
+              <div class="presented-text">${isGift ? 'This certificate is presented to' : 'This certificate is proudly presented to'}</div>
               
               <!-- Recipient Name -->
               <div class="recipient-name">${recipientName}</div>
               
               <!-- Recognition Text -->
               <div class="recognition-text">
-                in recognition of ${isGift ? `<strong>${adopterName}'s</strong>` : 'your'} generous adoption of an olive tree in <strong>${location}</strong>
+                ${isGift 
+                  ? `In recognition of an olive tree adopted in your name<br>by <strong>${adopterName}</strong>`
+                  : `In recognition of your adoption of an olive tree in the Holy Land.`}
               </div>
               
               <!-- Impact Statement -->
               <div class="impact-text">
-                Your adoption nurtures farmers, preserves heritage, and fuels a future of dignity and resilience. Together, we are growing a sustainable tomorrow rooted in the Holy Land.
+                ${isGift 
+                  ? `This thoughtful gift supports farmers, protects living heritage, and helps keep the land alive and productive. It represents a real contribution — a tree cared for, a livelihood supported, and a story carried forward.<br><br>May this olive tree grow as a lasting symbol of care, connection, and shared responsibility for the future.`
+                  : `This act directly supports farmers, protects living heritage, and helps keep the land productive and cared for. Through your symbolic adoption, an olive tree continues to grow, a farmer continues to work with dignity, and a meaningful connection is created between people and place.<br><br>Together, we are cultivating a greener, more connected future — rooted in the Holy Land and sustained by real action.`}
               </div>
               
               <!-- Certificate Details -->
@@ -1617,7 +1626,7 @@ class EmailService {
               <p style="font-size: 18px; color: #047857;">This is a momentous occasion! You've made a lasting impact on the environment and Palestinian communities.</p>
             </div>
             <p><strong>Tree:</strong> ${treeData.name || 'Your Olive Tree'}</p>
-            <p><strong>Location:</strong> ${treeData.location || 'Palestine'}</p>
+            <p><strong>Location:</strong> ${treeData.location || 'Holy Land'}</p>
             <p>Your tree will continue to grow and make a positive environmental impact for years to come. You'll receive updates about your tree's progress!</p>
             <a href="${process.env.FRONTEND_URL || 'https://zeituna.com'}/roots" class="button">View Your Tree</a>
             <p>Thank you for making a difference! 🌱</p>
