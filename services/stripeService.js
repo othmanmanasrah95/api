@@ -112,8 +112,7 @@ class StripeService {
         metadata.shippingPostalCode = orderData.shipping.postalCode || '';
       }
 
-      // Create payment intent with explicit configuration
-      const paymentIntentParams = {
+      const paymentIntent = await this.stripe.paymentIntents.create({
         amount: amountInCents,
         currency: normalizedCurrency,
         metadata: metadata,
@@ -121,59 +120,14 @@ class StripeService {
           enabled: true,
         },
         description: `Order #${orderData.orderId} - ${orderData.items.length} items`,
-        payment_method_options: {
-          card: {
-            request_three_d_secure: 'automatic'
-          }
-        },
-        // Explicitly set capture method (automatic means charge immediately when confirmed)
-        capture_method: 'automatic'
-        // Note: confirmation_method cannot be used with automatic_payment_methods
-        // When using automatic_payment_methods, confirmation happens via client-side confirmCardPayment
-      };
-
-      console.log('Creating Stripe Payment Intent with params:', {
-        amountInCents,
-        currency: normalizedCurrency,
-        orderId: orderData.orderId,
-        params: paymentIntentParams
       });
-
-      const paymentIntent = await this.stripe.paymentIntents.create(paymentIntentParams);
-
-      // Verify the payment intent was created correctly
-      if (!paymentIntent.client_secret) {
-        throw new Error('Payment intent created but no client secret returned from Stripe');
-      }
 
       console.log('Payment Intent created successfully:', {
         id: paymentIntent.id,
         amount: paymentIntent.amount,
-        amountInDollars: (paymentIntent.amount / 100).toFixed(2),
         currency: paymentIntent.currency,
-        status: paymentIntent.status,
-        client_secret: paymentIntent.client_secret ? 'present' : 'missing',
-        client_secret_length: paymentIntent.client_secret ? paymentIntent.client_secret.length : 0,
-        created: paymentIntent.created,
-        livemode: paymentIntent.livemode
+        status: paymentIntent.status
       });
-
-      // Double-check by retrieving the payment intent immediately after creation
-      // This ensures it's fully propagated in Stripe's system
-      try {
-        const verifyIntent = await this.stripe.paymentIntents.retrieve(paymentIntent.id);
-        console.log('Payment Intent verified after creation:', {
-          id: verifyIntent.id,
-          status: verifyIntent.status,
-          client_secret_present: !!verifyIntent.client_secret
-        });
-      } catch (verifyError) {
-        console.error('Warning: Could not verify payment intent immediately after creation:', {
-          paymentIntentId: paymentIntent.id,
-          error: verifyError.message
-        });
-        // Don't throw - the payment intent was created, verification is just a safety check
-      }
 
       return {
         success: true,
@@ -214,21 +168,10 @@ class StripeService {
         paymentIntent: paymentIntent
       };
     } catch (error) {
-      // If payment intent not found, return success: false
-      if (error.code === 'resource_missing') {
-        return {
-          success: false,
-          error: 'Payment intent not found',
-          code: error.code,
-          type: error.type
-        };
-      }
       console.error('Stripe Payment Intent Retrieval Error:', error);
       return {
         success: false,
-        error: error.message,
-        code: error.code,
-        type: error.type
+        error: error.message
       };
     }
   }
