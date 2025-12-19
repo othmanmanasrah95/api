@@ -141,6 +141,11 @@ class StripeService {
 
       const paymentIntent = await this.stripe.paymentIntents.create(paymentIntentParams);
 
+      // Verify the payment intent was created correctly
+      if (!paymentIntent.client_secret) {
+        throw new Error('Payment intent created but no client secret returned from Stripe');
+      }
+
       console.log('Payment Intent created successfully:', {
         id: paymentIntent.id,
         amount: paymentIntent.amount,
@@ -148,8 +153,27 @@ class StripeService {
         currency: paymentIntent.currency,
         status: paymentIntent.status,
         client_secret: paymentIntent.client_secret ? 'present' : 'missing',
-        created: paymentIntent.created
+        client_secret_length: paymentIntent.client_secret ? paymentIntent.client_secret.length : 0,
+        created: paymentIntent.created,
+        livemode: paymentIntent.livemode
       });
+
+      // Double-check by retrieving the payment intent immediately after creation
+      // This ensures it's fully propagated in Stripe's system
+      try {
+        const verifyIntent = await this.stripe.paymentIntents.retrieve(paymentIntent.id);
+        console.log('Payment Intent verified after creation:', {
+          id: verifyIntent.id,
+          status: verifyIntent.status,
+          client_secret_present: !!verifyIntent.client_secret
+        });
+      } catch (verifyError) {
+        console.error('Warning: Could not verify payment intent immediately after creation:', {
+          paymentIntentId: paymentIntent.id,
+          error: verifyError.message
+        });
+        // Don't throw - the payment intent was created, verification is just a safety check
+      }
 
       return {
         success: true,

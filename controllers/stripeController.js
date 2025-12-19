@@ -231,34 +231,57 @@ class StripeController {
 
       // Cancel old payment intent if it exists and is different
       // Only cancel if the old payment intent is in a state that allows cancellation
+      // IMPORTANT: Only cancel OLD payment intents, never the one we just created
       if (order.payment.transactionId && 
           order.payment.transactionId !== result.paymentIntentId) {
+        console.log('Found existing payment intent, checking if it should be canceled:', {
+          oldPaymentIntentId: order.payment.transactionId,
+          newPaymentIntentId: result.paymentIntentId
+        });
+        
         try {
           // Check the status of the old payment intent before canceling
           const oldPaymentIntent = await stripeService.getPaymentIntent(order.payment.transactionId);
           
           if (oldPaymentIntent && oldPaymentIntent.success) {
             const oldPI = oldPaymentIntent.paymentIntent;
-            // Only cancel if it's in a cancellable state
-            if (oldPI.status === 'requires_payment_method' || 
-                oldPI.status === 'requires_confirmation' ||
-                oldPI.status === 'requires_action') {
+            // Only cancel if it's in a cancellable state AND it's different from the new one
+            if (oldPI.id !== result.paymentIntentId && 
+                (oldPI.status === 'requires_payment_method' || 
+                 oldPI.status === 'requires_confirmation' ||
+                 oldPI.status === 'requires_action')) {
               await stripeService.cancelPaymentIntent(order.payment.transactionId);
               console.log('Canceled old payment intent:', {
                 paymentIntentId: order.payment.transactionId,
-                oldStatus: oldPI.status
+                oldStatus: oldPI.status,
+                reason: 'Replaced by new payment intent'
               });
             } else {
-              console.log('Skipping cancellation of old payment intent (not in cancellable state):', {
+              console.log('Skipping cancellation of old payment intent:', {
                 paymentIntentId: order.payment.transactionId,
-                status: oldPI.status
+                status: oldPI.status,
+                reason: oldPI.id === result.paymentIntentId ? 'Same as new payment intent' : 'Not in cancellable state'
               });
             }
+          } else {
+            console.log('Old payment intent not found or error retrieving it:', {
+              paymentIntentId: order.payment.transactionId,
+              error: oldPaymentIntent?.error
+            });
           }
         } catch (cancelError) {
           // Ignore errors if payment intent is already canceled/not found
-          console.warn('Could not cancel old payment intent (may already be canceled):', cancelError.message);
+          console.warn('Could not cancel old payment intent (may already be canceled):', {
+            paymentIntentId: order.payment.transactionId,
+            error: cancelError.message
+          });
         }
+      } else if (!order.payment.transactionId) {
+        console.log('No existing payment intent found, this is a new payment intent');
+      } else {
+        console.log('Payment intent ID matches existing one, no cancellation needed:', {
+          paymentIntentId: result.paymentIntentId
+        });
       }
 
       // Update order with payment intent ID
@@ -270,7 +293,9 @@ class StripeController {
         paymentIntentId: result.paymentIntentId,
         amount: result.amount,
         currency: result.currency,
-        clientSecretPresent: !!result.clientSecret
+        clientSecretPresent: !!result.clientSecret,
+        orderStatus: order.status,
+        paymentStatus: order.payment.status
       });
 
       res.json({
