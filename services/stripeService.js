@@ -175,10 +175,21 @@ class StripeService {
         paymentIntent: paymentIntent
       };
     } catch (error) {
+      // If payment intent not found, return success: false
+      if (error.code === 'resource_missing') {
+        return {
+          success: false,
+          error: 'Payment intent not found',
+          code: error.code,
+          type: error.type
+        };
+      }
       console.error('Stripe Payment Intent Retrieval Error:', error);
       return {
         success: false,
-        error: error.message
+        error: error.message,
+        code: error.code,
+        type: error.type
       };
     }
   }
