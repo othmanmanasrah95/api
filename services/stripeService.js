@@ -126,9 +126,10 @@ class StripeService {
             request_three_d_secure: 'automatic'
           }
         },
-        // Explicitly set capture method and confirmation method
-        capture_method: 'automatic',
-        confirmation_method: 'manual'
+        // Explicitly set capture method (automatic means charge immediately when confirmed)
+        capture_method: 'automatic'
+        // Note: confirmation_method cannot be used with automatic_payment_methods
+        // When using automatic_payment_methods, confirmation happens via client-side confirmCardPayment
       };
 
       console.log('Creating Stripe Payment Intent with params:', {
