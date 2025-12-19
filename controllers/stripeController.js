@@ -499,6 +499,10 @@ class StripeController {
         order.status = 'confirmed';
         await order.save();
         console.log(`Order ${order._id} payment confirmed via webhook`);
+      } else {
+        // Order was deleted - log for reference but don't error
+        const orderId = paymentIntent.metadata?.orderId;
+        console.warn(`Payment intent ${paymentIntent.id} succeeded but order ${orderId || 'unknown'} not found (may have been deleted)`);
       }
     } catch (error) {
       console.error('Handle Payment Succeeded Error:', error);
@@ -519,6 +523,10 @@ class StripeController {
         order.status = 'cancelled';
         await order.save();
         console.log(`Order ${order._id} payment failed via webhook`);
+      } else {
+        // Order was deleted - log for reference but don't error
+        const orderId = paymentIntent.metadata?.orderId;
+        console.warn(`Payment intent ${paymentIntent.id} failed but order ${orderId || 'unknown'} not found (may have been deleted)`);
       }
     } catch (error) {
       console.error('Handle Payment Failed Error:', error);
@@ -539,6 +547,10 @@ class StripeController {
         order.status = 'cancelled';
         await order.save();
         console.log(`Order ${order._id} payment canceled via webhook`);
+      } else {
+        // Order was deleted - log for reference but don't error
+        const orderId = paymentIntent.metadata?.orderId;
+        console.warn(`Payment intent ${paymentIntent.id} canceled but order ${orderId || 'unknown'} not found (may have been deleted)`);
       }
     } catch (error) {
       console.error('Handle Payment Canceled Error:', error);

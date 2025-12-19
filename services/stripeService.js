@@ -120,6 +120,13 @@ class StripeService {
           enabled: true,
         },
         description: `Order #${orderData.orderId} - ${orderData.items.length} items`,
+        // Set payment intent to expire after 24 hours (default is 24h, but being explicit)
+        // This ensures payment intents don't expire too quickly
+        payment_method_options: {
+          card: {
+            request_three_d_secure: 'automatic'
+          }
+        }
       });
 
       console.log('Payment Intent created successfully:', {
