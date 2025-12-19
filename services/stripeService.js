@@ -112,7 +112,8 @@ class StripeService {
         metadata.shippingPostalCode = orderData.shipping.postalCode || '';
       }
 
-      const paymentIntent = await this.stripe.paymentIntents.create({
+      // Create payment intent with explicit configuration
+      const paymentIntentParams = {
         amount: amountInCents,
         currency: normalizedCurrency,
         metadata: metadata,
@@ -120,20 +121,33 @@ class StripeService {
           enabled: true,
         },
         description: `Order #${orderData.orderId} - ${orderData.items.length} items`,
-        // Set payment intent to expire after 24 hours (default is 24h, but being explicit)
-        // This ensures payment intents don't expire too quickly
         payment_method_options: {
           card: {
             request_three_d_secure: 'automatic'
           }
-        }
+        },
+        // Explicitly set capture method and confirmation method
+        capture_method: 'automatic',
+        confirmation_method: 'manual'
+      };
+
+      console.log('Creating Stripe Payment Intent with params:', {
+        amountInCents,
+        currency: normalizedCurrency,
+        orderId: orderData.orderId,
+        params: paymentIntentParams
       });
+
+      const paymentIntent = await this.stripe.paymentIntents.create(paymentIntentParams);
 
       console.log('Payment Intent created successfully:', {
         id: paymentIntent.id,
         amount: paymentIntent.amount,
+        amountInDollars: (paymentIntent.amount / 100).toFixed(2),
         currency: paymentIntent.currency,
-        status: paymentIntent.status
+        status: paymentIntent.status,
+        client_secret: paymentIntent.client_secret ? 'present' : 'missing',
+        created: paymentIntent.created
       });
 
       return {

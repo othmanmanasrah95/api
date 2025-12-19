@@ -68,6 +68,14 @@ class StripeController {
       const orderAmount = Math.round(rawAmount * 100) / 100; // Round to 2 decimal places
       let orderCurrency = (order.payment?.currency || currency || 'usd').toLowerCase();
 
+      console.log('Order amount calculation:', {
+        rawAmount,
+        orderAmount,
+        orderId: order._id,
+        totals: order.totals,
+        payment: order.payment
+      });
+
       // Validate order amount
       if (orderAmount <= 0) {
         console.error('Invalid order amount:', orderAmount, 'Order ID:', orderId);
@@ -80,7 +88,12 @@ class StripeController {
       // Stripe minimum amount validation (minimum $0.50 USD or equivalent)
       const MINIMUM_AMOUNT = 0.50;
       if (orderAmount < MINIMUM_AMOUNT) {
-        console.error('Order amount below Stripe minimum:', orderAmount, 'Order ID:', orderId);
+        console.error('Order amount below Stripe minimum:', {
+          orderAmount,
+          orderId: orderId,
+          rawAmount,
+          totals: order.totals
+        });
         return res.status(400).json({
           success: false,
           message: `Order amount must be at least $${MINIMUM_AMOUNT}. Current amount: $${orderAmount.toFixed(2)}`
@@ -217,11 +230,31 @@ class StripeController {
       }
 
       // Cancel old payment intent if it exists and is different
+      // Only cancel if the old payment intent is in a state that allows cancellation
       if (order.payment.transactionId && 
           order.payment.transactionId !== result.paymentIntentId) {
         try {
-          await stripeService.cancelPaymentIntent(order.payment.transactionId);
-          console.log('Canceled old payment intent:', order.payment.transactionId);
+          // Check the status of the old payment intent before canceling
+          const oldPaymentIntent = await stripeService.getPaymentIntent(order.payment.transactionId);
+          
+          if (oldPaymentIntent && oldPaymentIntent.success) {
+            const oldPI = oldPaymentIntent.paymentIntent;
+            // Only cancel if it's in a cancellable state
+            if (oldPI.status === 'requires_payment_method' || 
+                oldPI.status === 'requires_confirmation' ||
+                oldPI.status === 'requires_action') {
+              await stripeService.cancelPaymentIntent(order.payment.transactionId);
+              console.log('Canceled old payment intent:', {
+                paymentIntentId: order.payment.transactionId,
+                oldStatus: oldPI.status
+              });
+            } else {
+              console.log('Skipping cancellation of old payment intent (not in cancellable state):', {
+                paymentIntentId: order.payment.transactionId,
+                status: oldPI.status
+              });
+            }
+          }
         } catch (cancelError) {
           // Ignore errors if payment intent is already canceled/not found
           console.warn('Could not cancel old payment intent (may already be canceled):', cancelError.message);
@@ -231,6 +264,14 @@ class StripeController {
       // Update order with payment intent ID
       order.payment.transactionId = result.paymentIntentId;
       await order.save();
+
+      console.log('Payment intent created and order updated:', {
+        orderId: order._id,
+        paymentIntentId: result.paymentIntentId,
+        amount: result.amount,
+        currency: result.currency,
+        clientSecretPresent: !!result.clientSecret
+      });
 
       res.json({
         success: true,
